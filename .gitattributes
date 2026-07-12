@@ -1,0 +1,13 @@
+# Normalize text files in the repository so Git does not guess line endings.
+* text=auto eol=lf
+
+# Windows PowerShell scripts should keep Windows line endings.
+*.ps1 text eol=crlf
+
+# Binary assets should never be line-ending normalized.
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.gif binary
+*.ico binary
+*.pdf binary

@@ -1,12 +1,12 @@
 # Todo Meva — Memory Capsule
 
-*Last Updated: 2026-07-11*
+*Last Updated: 2026-07-12*
 
 ---
 
 ## Project Overview
 
-Todo Meva is a feature-rich, single-user Productivity & To-Do Application with deep categorization, domain-specific smart presets (default captions/templates), robust scheduling, and reminder capabilities. Built as a offline-first SPA with glassmorphism UI.
+Todo Meva is a feature-rich, single-user Productivity & To-Do Application with deep categorization, domain-specific smart presets (default captions/templates), scheduling, recurrence, reminder capabilities, and a persistent light/dark theme toggle. Built as an offline-first SPA with glassmorphism UI.
 
 ## Tech Stack
 
@@ -29,7 +29,7 @@ Todo Meva/
 ├── assets/
 │   └── color-palette.jpg         # Original color palette reference
 ├── css/
-│   └── style.css                 # Complete glassmorphism theme
+│   └── style.css                 # Theme variables, glassmorphism UI, CDN utility fallbacks
 └── js/
     ├── app.js                    # App orchestration, navigation, events
     ├── db.js                     # Dexie DB schema v2, CRUD, activity tracking
@@ -106,23 +106,28 @@ Activity types: `task_created`, `task_completed`, `task_deleted`, `task_updated`
 
 48 Smart Templates (6 per category on average) covering all domains.
 
-## Color Palette
+## Theme & Color System
 
 Original reference: `assets/color-palette.jpg`
 
 | Role | Hex | Usage |
 |------|-----|-------|
-| Base dark | `#1B1B1D` | Body background, modal backgrounds |
-| Warm dark | `#3D332F` | Glass panels, cards, sidebar |
+| Base dark | `#1B1B1D` | Dark body background, modal backgrounds |
+| Warm dark | `#3D332F` | Dark glass panels, cards, sidebar |
 | Orange accent | `#FF8A3D` | Buttons, FAB, active states, icons, primary accent |
 | Light peach | `#FFCF9A` | Secondary accent, medium priority, hovers |
-| Cream text | `#FFF6EC` | All text, headings, labels |
+| Cream text | `#FFF6EC` | Dark theme text, headings, labels |
+| Warm light | `#F5F0EB` | Light theme body background |
+| Warm dark text | `#2D2A24` | Light theme main text |
 
 ### Design System
 - **Glass effect**: `backdrop-filter: blur(16-24px)` + `rgba(61,51,47,0.3-0.85)`
 - **Glass borders**: `rgba(255,138,61,0.06-0.1)`
 - **Success**: `#6ee7b7` (emerald) | **Error/Overdue**: `#f87171` (red)
 - **Priority badges**: High=red, Medium=peach, Low=green
+- CSS custom properties live in `css/style.css` under `:root` and `[data-theme="light"]`.
+- Theme preference persists in `localStorage.todoMeva_theme` and is applied early in `index.html` to avoid theme flash.
+- Tailwind CDN may fail offline, so essential utility fallbacks are defined locally in `style.css`.
 
 ## Features Implemented
 
@@ -134,6 +139,8 @@ Original reference: `assets/color-palette.jpg`
 
 ### Phase 2 — Core UI
 - [x] Dark glassmorphism theme with animated background orbs
+- [x] Persistent light/dark theme toggle in sidebar footer
+- [x] Local fallback utility classes for Tailwind CDN outages
 - [x] Responsive sidebar with nav + category list + counts
 - [x] 4 views: Dashboard, Upcoming, Category Filter, Priority Matrix
 - [x] Landing page with hero, mockup, feature cards, footer
@@ -152,26 +159,25 @@ Original reference: `assets/color-palette.jpg`
 - [x] Recurring tasks: Daily/Weekly/Monthly/Yearly auto-generation on completion
 - [x] Web Notifications reminders (15min/30min/1h/2h/1d/2d before due)
 - [x] Periodic reminder checker (30s interval)
-- [x] Activity-powered dashboard with stats, streak calculation, recent feed
-- [x] Category distribution bar chart
+- [x] Dashboard with quick create, category cards, status counts, today/overdue/other task sections
 - [x] Timezone-aware date queries (local date strings)
 
 ## Key Files & Their Responsibilities
 
 ### `index.html`
-Entry point. Contains landing page (#landing-page), app shell (#app-shell), modals, and onboarding overlay (#onboarding-overlay). Scripts loaded in order: Tailwind (preflight disabled) → Dexie → Lucide → app.js (module).
+Entry point. Contains early theme application script, landing page (#landing-page), app shell (#app-shell), modals, and onboarding overlay (#onboarding-overlay). Scripts loaded in order: Tailwind (preflight disabled) → Dexie → Lucide → app.js (module). Includes an inline `window.__enterApp` fallback so Launch App still reveals the shell if the module graph loads slowly.
 
 ### `js/app.js`
-Orchestrator. Defines `window.__enterApp()` for landing→app transition. Sets `window.refreshCurrentView` for global re-rendering. Wires sidebar nav, category clicks, FAB, keyboard shortcuts (Ctrl+K, Escape), export/import, mobile menu, and reminder interval.
+Orchestrator. Defines `window.__enterApp()` for landing→app transition. Sets `window.refreshCurrentView` and `window.navigateTo` for global re-rendering/navigation. Wires sidebar nav, category clicks, FAB, keyboard shortcuts (Ctrl+K, Escape), export/import, mobile menu, theme toggle, and reminder interval. Uses an `initPromise` guard so app initialization only runs once.
 
 ### `js/db.js`
 Database layer. Dexie schema v2 with 4 tables. Exports all CRUD functions and helper queries. Key helpers: `localDateStr()`, `localDateTimeStr()` for consistent local-time comparisons (fixes timezone mismatch between `toISOString()` UTC and user-entered local dates).
 
 ### `js/components.js`
-UI components. Renders sidebar, task cards, task lists, quick-add modal (2-step), task-detail/edit modal, onboarding steps. Handles all task CRUD event wiring. Exports `toggleTaskStatus`, `deleteTaskById`, `openQuickAdd`, `openTaskDetail`, `showOnboarding`.
+UI components. Renders sidebar, task cards, task lists, quick-add modal (2-step), task-detail/edit modal, onboarding steps. Handles all task CRUD event wiring. Exports `attachTaskCardEvents`, `toggleTaskStatus`, `deleteTaskById`, `openQuickAdd`, `openTaskDetail`, `showOnboarding`. Quick Add uses one delegated close handler on `#quick-add-body`.
 
 ### `js/views.js`
-View renderers. Dashboard (stats + activity feed + overdue/today/upcoming + distribution chart), Upcoming (30-day chronological grouped), Category Filter, Priority Matrix. Each view fetches data and renders via `renderTaskCard`.
+View renderers. Dashboard (quick create + category cards + status counts + today/overdue/other task sections), Upcoming (30-day chronological grouped), Category Filter, Priority Matrix. Each view fetches data and renders via `renderTaskCard`.
 
 ### `js/seed.js`
 Initial data: 8 SEED_CATEGORIES and 48 SEED_TEMPLATES. Also exports `PRIORITY_CONFIG` and `STATUS_CONFIG` for consistent badge styling.
@@ -189,20 +195,21 @@ Notification system. `checkAndFireReminders()` checks each task's reminders, fir
 - [ ] Timezone edge cases around midnight boundary
 - [ ] No drag-and-drop reordering of tasks
 - [ ] No task search/full-text search
-- [ ] No dark/light theme toggle (dark-only currently)
+- [ ] Notification permission is no longer requested on startup; add an explicit UI prompt if reminders need first-time permission.
+- [ ] External CDNs (Tailwind, Dexie, Lucide, Google Fonts) can fail offline; Tailwind utility fallback exists, but Dexie/Lucide still depend on CDN.
 
 ## Git & Deployment
 
 - Remote: `https://github.com/kuldeep7ke-eng/Todo-Meva.git`
 - Branch: `main`
-- Serve: `npx http-server -p 3000 -o --cors`
+- Serve: `npx http-server -p 3000 -c-1 --cors`
 - Access: `http://127.0.0.1:3000`
 
 ## Commands Reference
 
 ```bash
 # Start development server
-npx http-server -p 3000 -o --cors
+npx http-server -p 3000 -c-1 --cors
 
 # Push updates (run after changes)
 git add -A

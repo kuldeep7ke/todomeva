@@ -1,128 +1,148 @@
-import { getAllCategories, getAllTasks, getTasksDueToday, getOverdueTasks, getUpcomingTasks, getRecentActivities, getActivityStats } from './db.js';
-import { renderTaskList, renderTaskCard, formatDate, openTaskDetail, toggleTaskStatus, deleteTaskById, esc } from './components.js';
+import { getAllCategories, getAllTasks, getUpcomingTasks, saveTask, logActivity } from './db.js?v=4';
+import { renderTaskList, renderTaskCard, formatDate, attachTaskCardEvents, esc } from './components.js?v=4';
 
 export async function renderDashboard() {
   const container = document.getElementById('view-content');
   const header = document.getElementById('view-header');
-  const [categories, todayTasks, overdueTasks, allTasks, recentActivity, stats] = await Promise.all([
-    getAllCategories(), getTasksDueToday(), getOverdueTasks(), getAllTasks(), getRecentActivities(10), getActivityStats()
-  ]);
 
-  const activeTasks = allTasks.filter(t => t.status !== 'archived');
-  const inProgress = allTasks.filter(t => t.status === 'in_progress');
-
-  header.querySelector('h1').textContent = 'Dashboard';
-  header.querySelector('.view-subtitle').textContent = `${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
-
-  let html = `
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-header">
-        <span class="stat-label">Total Tasks</span>
-        <div class="stat-icon" style="background:rgba(255,138,61,0.12)"><i data-lucide="list" class="w-4 h-4" style="color:#FF8A3D"></i></div>
-      </div>
-      <div class="stat-value">${activeTasks.length}</div>
-      ${stats.completedToday > 0 ? `<div class="stat-sub">${stats.completedToday} completed today</div>` : '<div class="stat-sub">&nbsp;</div>'}
-    </div>
-    <div class="stat-card">
-      <div class="stat-header">
-        <span class="stat-label">Completed Today</span>
-        <div class="stat-icon" style="background:rgba(52,211,153,0.15)"><i data-lucide="check-circle" class="w-4 h-4" style="color:#34d399"></i></div>
-      </div>
-      <div class="stat-value">${stats.completedToday}</div>
-      <div class="stat-sub">${stats.completedThisWeek} this week</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-header">
-        <span class="stat-label">Day Streak</span>
-        <div class="stat-icon" style="background:rgba(255,207,154,0.12)"><i data-lucide="flame" class="w-4 h-4" style="color:#FFCF9A"></i></div>
-      </div>
-      <div class="stat-value">${stats.streak}${stats.streak === 1 ? ' day' : stats.streak > 1 ? ' days' : ''}</div>
-      <div class="stat-sub">${stats.streak > 0 ? 'Keep it up! 🔥' : 'Start your streak today'}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-header">
-        <span class="stat-label">In Progress</span>
-        <div class="stat-icon" style="background:rgba(255,207,154,0.1)"><i data-lucide="loader" class="w-4 h-4" style="color:#FFCF9A"></i></div>
-      </div>
-      <div class="stat-value">${inProgress.length}</div>
-      <div class="stat-sub">${stats.completionRate}% overall completion</div>
-    </div>
-  </div>`;
-
-  // Activity Feed
-  if (recentActivity.length > 0) {
-    html += `<div class="activity-feed">`;
-    html += `<div class="section-header" style="margin-bottom:4px"><i data-lucide="activity" class="w-4 h-4" style="color:#FF8A3D"></i><h2>Recent Activity</h2></div>`;
-    html += recentActivity.map(a => {
-      const time = timeAgo(a.timestamp);
-      const typeClass = a.type === 'task_created' ? 'created' : a.type === 'task_completed' ? 'completed' : a.type === 'task_deleted' ? 'deleted' : a.type === 'task_updated' ? 'updated' : 'recurred';
-      const label = a.type === 'task_created' ? 'created' : a.type === 'task_completed' ? 'completed' : a.type === 'task_deleted' ? 'deleted' : a.type === 'task_updated' ? 'updated' : 'recurred';
-      return `<div class="activity-item">
-        <span class="activity-dot ${typeClass}"></span>
-        <span class="activity-text"><strong>${esc(a.taskTitle)}</strong> ${label}${a.categoryName ? ' in ' + esc(a.categoryName) : ''}</span>
-        <span class="activity-time">${time}</span>
-      </div>`;
-    }).join('');
-    html += `</div>`;
+  // Phase 1: guarantee visible content immediately
+  if (container) {
+    container.innerHTML = '<div style="background:rgba(var(--accent-rgb),0.06);border:2px solid var(--accent-primary);border-radius:12px;padding:30px;margin:20px;text-align:center;color:var(--text-primary)"><p style="font-size:15px">Rendering dashboard...</p></div>';
   }
 
-  // Overdue
-  const filteredOverdue = overdueTasks.filter(t => t.status !== 'archived');
-  if (filteredOverdue.length > 0) {
-    html += `<div style="margin-bottom:24px">
-      <div class="section-header"><i data-lucide="alert-circle" class="w-4 h-4" style="color:#f87171"></i><h2 style="color:#f87171">Overdue (${filteredOverdue.length})</h2></div>
-      <div class="space-y-2">${filteredOverdue.map(t => renderTaskCard(t, categories)).join('')}</div>
-    </div>`;
+  if (!container || !header) {
+    console.error('renderDashboard: missing container or header');
+    return;
   }
 
-  // Today's Tasks
-  const filteredToday = todayTasks.filter(t => t.status !== 'completed' && t.status !== 'archived');
-  html += `<div style="margin-bottom:24px">
-      <div class="section-header"><i data-lucide="calendar" class="w-4 h-4" style="color:#FF8A3D"></i><h2>Today's Tasks (${filteredToday.length})</h2></div>
-    ${filteredToday.length > 0
-      ? `<div class="space-y-2">${filteredToday.map(t => renderTaskCard(t, categories)).join('')}</div>`
-      : `<div class="empty-state" style="padding:30px"><i data-lucide="sun" class="w-10 h-10"></i><p>No tasks for today</p><span style="font-size:13px;color:rgba(255,246,236,0.3)">Enjoy your day!</span></div>`}
-  </div>`;
+  try {
+    header.querySelector('h1').textContent = 'Dashboard';
+    const subtitleEl = header.querySelector('.view-subtitle');
+    if (subtitleEl) subtitleEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    else console.warn('Dashboard subtitle element not found');
 
-  // Category Distribution
-  if (stats.categoryDist.length > 0) {
-    html += `<div class="activity-feed">
-      <div class="section-header" style="margin-bottom:12px"><i data-lucide="pie-chart" class="w-4 h-4" style="color:#FF8A3D"></i><h2>Task Distribution</h2></div>
-      <div style="display:flex;flex-direction:column;gap:8px">`;
-    const maxCount = Math.max(...stats.categoryDist.map(c => c.count), 1);
-    stats.categoryDist.forEach(c => {
-      const pct = Math.round((c.count / maxCount) * 100);
-      html += `<div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <i data-lucide="${c.icon}" class="w-3.5 h-3.5" style="color:${c.color};flex-shrink:0"></i>
-           <span style="font-size:12px;color:rgba(255,246,236,0.55);flex:1">${c.name}</span>
-           <span style="font-size:12px;color:rgba(255,246,236,0.35)">${c.count}</span>
-        </div>
-         <div style="height:4px;background:rgba(255,246,236,0.06);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${c.color};border-radius:2px;transition:width 0.5s ease"></div>
-        </div>
-      </div>`;
+    const [categories, allTasks] = await Promise.all([getAllCategories(), getAllTasks()]);
+
+    const activeTasks = allTasks.filter(t => t.status !== 'archived');
+    const todoTasks = activeTasks.filter(t => t.status === 'todo');
+    const inProgress = activeTasks.filter(t => t.status === 'in_progress');
+    const completed = allTasks.filter(t => t.status === 'completed');
+    const now = new Date();
+    const todayStr = now.toDateString();
+    const overdueTasks = activeTasks.filter(t => t.dueDate && new Date(t.dueDate) < now && t.status !== 'completed');
+    const todayTasks = activeTasks.filter(t => {
+      if (!t.dueDate || t.status === 'completed') return false;
+      const due = new Date(t.dueDate);
+      return due.toDateString() === todayStr && due >= now;
     });
-    html += `</div></div>`;
-  }
+    const doneCount = completed.length;
+    const overdueCount = overdueTasks.length;
+    const otherTasks = activeTasks.filter(t => {
+      if (t.status === 'completed') return false;
+      const due = t.dueDate ? new Date(t.dueDate) : null;
+      if (due && due.toDateString() === todayStr) return false;
+      if (due && due < now) return false;
+      return true;
+    });
 
-  // Upcoming 3 days
-  const upcoming = await getUpcomingTasks(3);
-  const filteredUpcoming = upcoming.filter(t => {
-    const due = t.dueDate ? new Date(t.dueDate).toDateString() : '';
-    return due !== new Date().toDateString() && t.status !== 'completed' && t.status !== 'archived';
-  });
-  if (filteredUpcoming.length > 0) {
-    html += `<div style="margin-bottom:24px">
-        <div class="section-header"><i data-lucide="clock" class="w-4 h-4" style="color:#FFCF9A"></i><h2>Next 3 Days (${filteredUpcoming.length})</h2></div>
-      <div class="space-y-2">${filteredUpcoming.map(t => renderTaskCard(t, categories)).join('')}</div>
+    let html = '';
+
+    // Quick Create
+    html += `<div class="dash-quick-create">
+      <form id="dash-quick-form" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="dash-quick-title" placeholder="What needs to be done?" style="flex:1;min-width:140px" class="form-input" required>
+        <select id="dash-quick-cat" class="form-input" style="flex:0 0 130px">
+          <option value="">No category</option>
+          ${categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+        </select>
+        <select id="dash-quick-priority" class="form-input" style="flex:0 0 90px">
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="low">Low</option>
+        </select>
+        <button type="submit" class="dash-create-btn">+ Add</button>
+      </form>
     </div>`;
-  }
 
-  container.innerHTML = html;
-  lucide.createIcons();
-  attachCardEvents(container);
+    // Category Cards
+    if (categories.length > 0) {
+      html += `<div class="dash-cat-grid">`;
+      categories.forEach(c => {
+        const count = activeTasks.filter(t => t.categoryId === c.id).length;
+        html += `<button class="dash-cat-card" data-action="navigate" data-view="category" data-category-id="${c.id}">
+          <i data-lucide="${c.icon}" class="w-4 h-4" style="color:${c.color}"></i>
+          <span class="dash-cat-name">${esc(c.name)}</span>
+          <span class="dash-cat-count">${count} todo${count !== 1 ? 's' : ''}</span>
+        </button>`;
+      });
+      html += `</div>`;
+    }
+
+    // Stats
+    html += `<div class="dash-stats-bar">
+      <div class="dash-stat-item"><span class="dash-stat-num">${todoTasks.length}</span><span class="dash-stat-label">To Do</span></div>
+      <div class="dash-stat-item"><span class="dash-stat-num">${inProgress.length}</span><span class="dash-stat-label">Doing</span></div>
+      <div class="dash-stat-item"><span class="dash-stat-num" style="color:#34d399">${doneCount}</span><span class="dash-stat-label">Done</span></div>
+      <div class="dash-stat-item${overdueCount > 0 ? ' clickable' : ''}" data-action="navigate" data-view="categories">
+        <span class="dash-stat-num" style="color:${overdueCount > 0 ? '#f87171' : 'rgba(var(--text-rgb),0.25)'}">${overdueCount}</span>
+        <span class="dash-stat-label">Overdue</span>
+      </div>
+    </div>`;
+
+    // Today / Overdue / Other
+    if (todayTasks.length > 0) {
+      html += `<div style="margin-bottom:14px"><div class="section-header" style="margin-bottom:6px"><i data-lucide="calendar" class="w-4 h-4" style="color:#FF8A3D"></i><h2 style="font-size:14px">Today</h2></div><div class="space-y-2">${todayTasks.map(t => renderTaskCard(t, categories)).join('')}</div></div>`;
+    }
+    if (overdueCount > 0) {
+      html += `<div style="margin-bottom:14px"><div class="section-header" style="margin-bottom:6px"><i data-lucide="alert-circle" class="w-4 h-4" style="color:#f87171"></i><h2 style="color:#f87171;font-size:14px">Overdue</h2></div><div class="space-y-2">${overdueTasks.map(t => renderTaskCard(t, categories)).join('')}</div></div>`;
+    }
+    if (otherTasks.length > 0) {
+      html += `<div class="space-y-2">${otherTasks.map(t => renderTaskCard(t, categories)).join('')}</div>`;
+    }
+
+    // Empty state
+    if (activeTasks.length === 0 && doneCount === 0) {
+      html += `<div class="empty-state" style="padding:40px 20px;margin-top:10px"><i data-lucide="inbox" class="w-14 h-14"></i><p>No tasks yet</p><span style="font-size:13px;color:rgba(var(--text-rgb),0.3)">Type a task above and hit Add to get started!</span></div>`;
+    } else if (otherTasks.length === 0 && overdueCount === 0 && todayTasks.length === 0) {
+      html += `<div class="empty-state" style="padding:30px 20px"><i data-lucide="check-circle" class="w-12 h-12" style="color:#34d399"></i><p>All caught up!</p><span style="font-size:13px;color:rgba(var(--text-rgb),0.3)">${doneCount} task${doneCount !== 1 ? 's' : ''} completed</span></div>`;
+    }
+
+    // Fallback — if html is still empty, insert something visible
+    if (!html.trim()) html = '<div class="empty-state" style="padding:40px 20px"><p style="color:rgba(var(--text-rgb),0.4)">Dashboard loaded (empty)</p></div>';
+
+    container.innerHTML = html;
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+    attachTaskCardEvents(container);
+
+    // Navigate clicks
+    container.querySelectorAll('[data-action="navigate"]').forEach(el => {
+      el.addEventListener('click', () => {
+        const view = el.dataset.view;
+        const catId = el.dataset.categoryId || null;
+        if (window.navigateTo) window.navigateTo(view, catId);
+      });
+    });
+
+    // Quick create
+    document.getElementById('dash-quick-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('dash-quick-title').value.trim();
+      if (!title) return;
+      const catId = document.getElementById('dash-quick-cat').value;
+      const priority = document.getElementById('dash-quick-priority').value;
+      const cat = categories.find(c => c.id === parseInt(catId));
+      const taskData = { title, description: '', categoryId: catId ? parseInt(catId) : null, priority, status: 'todo', dueDate: null, startDate: null, recurrence: null, reminders: null };
+      const id = await saveTask(taskData);
+      logActivity('task_created', { ...taskData, id }, cat?.name);
+      document.getElementById('dash-quick-title').value = '';
+      if (window.refreshCurrentView) window.refreshCurrentView();
+    });
+
+  } catch (e) {
+    console.error('Dashboard render error:', e);
+    container.innerHTML = `<div class="empty-state" style="padding:40px 20px"><i data-lucide="alert-triangle" class="w-12 h-12" style="color:#f87171"></i><p>Something went wrong</p><span style="font-size:13px;color:rgba(var(--text-rgb),0.3)">Error: ${esc(e.message || 'Unknown')}</span></div>`;
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  }
 }
 
 export async function renderUpcoming() {
@@ -135,7 +155,7 @@ export async function renderUpcoming() {
 
   if (upcoming.length === 0) {
     container.innerHTML = `<div class="empty-state"><i data-lucide="calendar" class="w-14 h-14"></i><p>No upcoming tasks</p><span>Schedule a task with a due date to see it here</span></div>`;
-    lucide.createIcons(); return;
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons(); return;
   }
 
   const sorted = upcoming.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
@@ -160,8 +180,8 @@ export async function renderUpcoming() {
   }
   html += '</div>';
   container.innerHTML = html;
-  lucide.createIcons();
-  attachCardEvents(container);
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  attachTaskCardEvents(container);
 }
 
 export async function renderCategoryFilter(categoryId) {
@@ -205,39 +225,11 @@ export async function renderPriorityMatrix() {
       <div class="priority-body">
         ${tasks.length > 0
           ? `<div class="space-y-2">${tasks.map(t => renderTaskCard(t, categories)).join('')}</div>`
-           : `<div style="display:flex;align-items:center;justify-content:center;padding:24px;color:rgba(255,246,236,0.2);font-size:13px"><i data-lucide="inbox" class="w-4 h-4" style="margin-right:6px"></i> No tasks</div>`}
+           : `<div style="display:flex;align-items:center;justify-content:center;padding:24px;color:rgba(var(--text-rgb),0.2);font-size:13px"><i data-lucide="inbox" class="w-4 h-4" style="margin-right:6px"></i> No tasks</div>`}
       </div>
     </div>`;
   }
   container.innerHTML = html;
-  lucide.createIcons();
-  attachCardEvents(container);
-}
-
-function attachCardEvents(container) {
-  container.querySelectorAll('.task-card').forEach(card => {
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('[data-action]')) return;
-      openTaskDetail(parseInt(card.dataset.taskId));
-    });
-  });
-  container.querySelectorAll('[data-action="toggle-status"]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleTaskStatus(parseInt(btn.dataset.taskId)); });
-  });
-  container.querySelectorAll('[data-action="delete"]').forEach(btn => {
-    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteTaskById(parseInt(btn.dataset.taskId)); });
-  });
-}
-
-function timeAgo(iso) {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+  attachTaskCardEvents(container);
 }

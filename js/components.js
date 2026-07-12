@@ -1,6 +1,6 @@
-import { getAllCategories, getTemplatesByCategory, getTask, saveTask, deleteTask, saveCategory, logActivity, getCategory } from './db.js';
-import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js';
-import { createRecurringTaskInstance, calculateNextOccurrence } from './recurrence.js';
+import { getAllCategories, getTemplatesByCategory, getTask, saveTask, deleteTask, saveCategory, logActivity, getCategory } from './db.js?v=4';
+import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=4';
+import { createRecurringTaskInstance, calculateNextOccurrence } from './recurrence.js?v=4';
 
 let currentView = 'dashboard';
 let currentFilter = null;
@@ -44,7 +44,7 @@ export function renderSidebar(categories, activeView, activeCategoryId, counts) 
     }).join('')}
     <button id="add-category-btn"><i data-lucide="plus-circle" class="w-4 h-4"></i> Add Category</button>
   `;
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 
 export function renderTaskList(tasks, categories, containerId = 'view-content') {
@@ -55,11 +55,11 @@ export function renderTaskList(tasks, categories, containerId = 'view-content') 
       <p>No tasks yet</p>
       <span>Click the + button to create your first task</span>
     </div>`;
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
     return;
   }
   container.innerHTML = `<div class="space-y-2">${tasks.map(t => renderTaskCard(t, categories)).join('')}</div>`;
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
   attachTaskCardEvents(container);
 }
 
@@ -77,13 +77,13 @@ export function renderTaskCard(task, categories) {
       </button>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-sm font-medium ${task.status === 'completed' ? 'line-through' : ''}" style="color:${task.status === 'completed' ? 'rgba(255,246,236,0.35)' : 'rgba(255,246,236,0.9)'}">${esc(task.title)}</span>
+          <span class="text-sm font-medium ${task.status === 'completed' ? 'line-through' : ''}" style="color:${task.status === 'completed' ? 'rgba(var(--text-rgb),0.35)' : 'rgba(var(--text-rgb),0.9)'}">${esc(task.title)}</span>
           ${cat ? `<span class="badge badge-category"><i data-lucide="${cat.icon}" class="w-3 h-3"></i> ${cat.name}</span>` : ''}
           <span class="badge badge-${task.priority}"><i data-lucide="${PRIORITY_CONFIG[task.priority]?.icon || 'minus'}" class="w-3 h-3"></i> ${PRIORITY_CONFIG[task.priority]?.label || task.priority}</span>
           <span class="badge badge-status badge-${task.status}">${STATUS_CONFIG[task.status]?.label || task.status}</span>
         </div>
-        ${task.description ? `<p style="color:rgba(255,246,236,0.35);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(task.description)}</p>` : ''}
-        <div style="display:flex;align-items:center;gap:16px;margin-top:6px;font-size:11px;color:rgba(255,246,236,0.25)">
+        ${task.description ? `<p style="color:rgba(var(--text-rgb),0.35);font-size:12px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(task.description)}</p>` : ''}
+        <div style="display:flex;align-items:center;gap:16px;margin-top:6px;font-size:11px;color:rgba(var(--text-rgb),0.25)">
           ${due ? `<span style="display:flex;align-items:center;gap:4px;${overdue ? 'color:#f87171;font-weight:500' : dueSoon ? 'color:#FFCF9A' : ''}">
             <i data-lucide="clock" class="w-3 h-3"></i>${formatDate(due)}${overdue ? ' (Overdue)' : ''}
           </span>` : ''}
@@ -92,12 +92,12 @@ export function renderTaskCard(task, categories) {
         </div>
       </div>
       <div style="display:flex;gap:4px;opacity:0;transition:opacity 0.15s" class="task-actions">
-        <button class="p-1.5 rounded-lg" style="color:rgba(255,246,236,0.25);background:transparent;border:none;cursor:pointer;transition:all 0.15s" data-task-id="${task.id}" data-action="edit"
-          onmouseover="this.style.color='#FF8A3D';this.style.background='rgba(255,138,61,0.1)'" onmouseout="this.style.color='rgba(255,246,236,0.25)';this.style.background='transparent'">
+        <button class="p-1.5 rounded-lg" style="color:rgba(var(--text-rgb),0.25);background:transparent;border:none;cursor:pointer;transition:all 0.15s" data-task-id="${task.id}" data-action="edit"
+          onmouseover="this.style.color='var(--accent-primary)';this.style.background='rgba(var(--accent-rgb),0.1)'" onmouseout="this.style.color='rgba(var(--text-rgb),0.25)';this.style.background='transparent'">
           <i data-lucide="pencil" class="w-4 h-4"></i>
         </button>
-        <button class="p-1.5 rounded-lg" style="color:rgba(255,246,236,0.25);background:transparent;border:none;cursor:pointer;transition:all 0.15s" data-task-id="${task.id}" data-action="delete"
-          onmouseover="this.style.color='#f87171';this.style.background='rgba(248,113,113,0.1)'" onmouseout="this.style.color='rgba(255,246,236,0.25)';this.style.background='transparent'">
+        <button class="p-1.5 rounded-lg" style="color:rgba(var(--text-rgb),0.25);background:transparent;border:none;cursor:pointer;transition:all 0.15s" data-task-id="${task.id}" data-action="delete"
+          onmouseover="this.style.color='#f87171';this.style.background='rgba(248,113,113,0.1)'" onmouseout="this.style.color='rgba(var(--text-rgb),0.25)';this.style.background='transparent'">
           <i data-lucide="trash-2" class="w-4 h-4"></i>
         </button>
       </div>
@@ -105,7 +105,7 @@ export function renderTaskCard(task, categories) {
   </div>`;
 }
 
-function attachTaskCardEvents(container) {
+export function attachTaskCardEvents(container) {
   container.querySelectorAll('.task-card').forEach(card => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('[data-action]')) return;
@@ -185,13 +185,13 @@ async function renderQuickAddForm(preselected) {
   let selCat = preselected ? categories.find(c => c.id === preselected) || null : null;
   let selTmpl = null;
 
-  function render() {
+  async function render() {
     if (step === 0) {
       container.innerHTML = `
         <div style="padding:28px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
             <h2 style="font-size:18px;font-weight:700">Choose Category</h2>
-            <button class="close-modal-btn" style="color:rgba(255,246,236,0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <button class="close-modal-btn" style="color:rgba(var(--text-rgb),0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px">
             ${categories.map(c => `
@@ -203,7 +203,7 @@ async function renderQuickAddForm(preselected) {
           </div>
         </div>`;
       container.querySelectorAll('.cat-select-btn').forEach(b => {
-        b.addEventListener('click', () => { selCat = categories.find(c => c.id === parseInt(b.dataset.catId)); step = 1; render(); });
+        b.addEventListener('click', () => { selCat = categories.find(c => c.id === parseInt(b.dataset.catId)); step = 1; render().catch(e => console.error('Quick add render error:', e)); });
       });
     } else {
       const templates = selCat ? await getTemplatesByCategory(selCat.id) : [];
@@ -211,18 +211,18 @@ async function renderQuickAddForm(preselected) {
         <div style="padding:28px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
             <div style="display:flex;align-items:center;gap:12px">
-              ${step === 1 ? '<button id="back-step" style="color:rgba(255,246,236,0.3);background:none;border:none;cursor:pointer"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>' : ''}
+              ${step === 1 ? '<button id="back-step" style="color:rgba(var(--text-rgb),0.3);background:none;border:none;cursor:pointer"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>' : ''}
               <h2 style="font-size:18px;font-weight:700">New Task</h2>
             </div>
-            <button class="close-modal-btn" style="color:rgba(255,246,236,0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <button class="close-modal-btn" style="color:rgba(var(--text-rgb),0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
           </div>
-          ${selCat ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:10px;margin-bottom:16px;border:1px solid rgba(255,255,255,0.05)">
+          ${selCat ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(var(--text-rgb),0.04);border-radius:10px;margin-bottom:16px;border:1px solid rgba(var(--text-rgb),0.05)">
             <i data-lucide="${selCat.icon}" class="w-4 h-4" style="color:${selCat.color}"></i>
-            <span style="font-size:13px;color:rgba(255,246,236,0.7)">${selCat.name}</span>
+            <span style="font-size:13px;color:rgba(var(--text-rgb),0.7)">${selCat.name}</span>
             <button id="change-cat" style="margin-left:auto;font-size:11px;color:#FF8A3D;background:none;border:none;cursor:pointer">Change</button>
           </div>` : ''}
           ${templates.length ? `<div style="margin-bottom:16px">
-            <label style="font-size:10px;font-weight:600;color:rgba(255,246,236,0.35);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Quick Templates</label>
+            <label style="font-size:10px;font-weight:600;color:rgba(var(--text-rgb),0.35);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px">Quick Templates</label>
             <div style="display:flex;flex-wrap:wrap;gap:6px">
               ${templates.map(t => `<button class="tmpl-btn ${selTmpl?.id === t.id ? 'selected' : ''}" data-tmpl-id="${t.id}">${esc(t.title)}</button>`).join('')}
             </div>
@@ -282,17 +282,16 @@ async function renderQuickAddForm(preselected) {
               </div>
             </div>
             <div style="display:flex;gap:12px">
-              <button type="button" class="close-modal-btn" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:rgba(255,246,236,0.5);cursor:pointer">Cancel</button>
-              <button type="submit" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:linear-gradient(135deg,#FF8A3D,#FFCF9A);border:none;border-radius:10px;color:#1B1B1D;cursor:pointer;font-family:inherit">Create Task</button>
+              <button type="button" class="close-modal-btn" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:rgba(var(--text-rgb),0.05);border:1px solid rgba(var(--text-rgb),0.08);border-radius:10px;color:rgba(var(--text-rgb),0.5);cursor:pointer">Cancel</button>
+              <button type="submit" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));border:none;border-radius:10px;color:var(--button-text);cursor:pointer;font-family:inherit">Create Task</button>
             </div>
           </form>
         </div>`;
 
-      container.querySelectorAll('.close-modal-btn').forEach(el => el.addEventListener('click', closeModals));
       const back = container.querySelector('#back-step');
-      if (back) back.addEventListener('click', () => { step = 0; selTmpl = null; render(); });
+      if (back) back.addEventListener('click', () => { step = 0; selTmpl = null; render().catch(e => console.error('Quick add render error:', e)); });
       const change = container.querySelector('#change-cat');
-      if (change) change.addEventListener('click', () => { step = 0; selTmpl = null; render(); });
+      if (change) change.addEventListener('click', () => { step = 0; selTmpl = null; render().catch(e => console.error('Quick add render error:', e)); });
       container.querySelectorAll('.tmpl-btn').forEach(b => {
         b.addEventListener('click', () => {
           selTmpl = templates.find(t => t.id === parseInt(b.dataset.tmplId));
@@ -313,10 +312,10 @@ async function renderQuickAddForm(preselected) {
             cb.innerHTML = '<i data-lucide="check" class="w-2.5 h-2.5 text-white"></i>';
           } else {
             cb.style.background = 'transparent';
-            cb.style.borderColor = 'rgba(255,246,236,0.15)';
+            cb.style.borderColor = 'rgba(var(--text-rgb),0.15)';
             cb.innerHTML = '';
           }
-          lucide.createIcons();
+          if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
         });
       });
       document.getElementById('quick-task-form').addEventListener('submit', async (e) => {
@@ -348,9 +347,13 @@ async function renderQuickAddForm(preselected) {
         if (typeof window.refreshCurrentView === 'function') window.refreshCurrentView();
       });
     }
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
   }
-  render();
+  container.onclick = (e) => {
+    if (!(e.target instanceof Element)) return;
+    if (e.target.closest('.close-modal-btn')) closeModals();
+  };
+  await render();
 }
 
 function renderDetailForm(task) {
@@ -360,7 +363,7 @@ function renderDetailForm(task) {
     <div style="padding:28px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
         <h2 style="font-size:18px;font-weight:700">Edit Task</h2>
-        <button class="close-modal-btn" style="color:rgba(255,246,236,0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <button class="close-modal-btn" style="color:rgba(var(--text-rgb),0.3);background:none;border:none;cursor:pointer"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <form id="detail-task-form">
         <div style="margin-bottom:12px">
@@ -409,8 +412,8 @@ function renderDetailForm(task) {
         </div>
         <div style="display:flex;gap:12px">
           <button type="button" id="delete-detail-task" style="padding:10px 20px;font-size:13px;font-weight:500;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);border-radius:10px;color:#f87171;cursor:pointer">Delete</button>
-          <button type="button" class="close-modal-btn" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:rgba(255,246,236,0.5);cursor:pointer">Cancel</button>
-          <button type="submit" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:linear-gradient(135deg,#FF8A3D,#FFCF9A);border:none;border-radius:10px;color:#1B1B1D;cursor:pointer;font-family:inherit">Save Changes</button>
+          <button type="button" class="close-modal-btn" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:rgba(var(--text-rgb),0.05);border:1px solid rgba(var(--text-rgb),0.08);border-radius:10px;color:rgba(var(--text-rgb),0.5);cursor:pointer">Cancel</button>
+          <button type="submit" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:linear-gradient(135deg,var(--accent-primary),var(--accent-secondary));border:none;border-radius:10px;color:var(--button-text);cursor:pointer;font-family:inherit">Save Changes</button>
         </div>
       </form>
     </div>`;
@@ -460,12 +463,12 @@ function renderDetailForm(task) {
     closeModals();
     if (typeof window.refreshCurrentView === 'function') window.refreshCurrentView();
   });
-  lucide.createIcons();
+  if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
 }
 
 export function closeModals() {
   document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
-  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-overlay')?.classList.add('hidden');
   document.body.classList.remove('overflow-hidden');
 }
 
@@ -507,7 +510,7 @@ export function showOnboarding() {
       dot.className = 'onb-step-dot' + (i === step ? ' active' : i < step ? ' done' : '');
     });
     document.getElementById('onb-next').textContent = step < ONBOARDING_STEPS.length - 1 ? 'Next' : 'Get Started';
-    lucide.createIcons();
+    if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
   }
 
   renderStep();
@@ -521,7 +524,9 @@ export function showOnboarding() {
 
 function closeOnboarding() {
   document.getElementById('onboarding-overlay').classList.add('hidden');
-  localStorage.setItem('todoMeva_onboardingDone', 'true');
+  try {
+    localStorage.setItem('todoMeva_onboardingDone', 'true');
+  } catch (e) {}
 }
 
 export function esc(str) {

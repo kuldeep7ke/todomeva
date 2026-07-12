@@ -1,3 +1,5 @@
+import { db } from './db.js?v=4';
+
 export const SEED_CATEGORIES = [
   { id: 1, name: 'Bank & Finance', icon: 'landmark', color: '#3B82F6', order: 1 },
   { id: 2, name: 'Farm & Agriculture', icon: 'sprout', color: '#22C55E', order: 2 },

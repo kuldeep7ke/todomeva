@@ -1,6 +1,6 @@
-import { db } from './db.js';
+import { db } from './db.js?v=4';
 
-let notificationPermission = Notification.permission;
+let notificationPermission = 'Notification' in window ? Notification.permission : 'default';
 
 export async function requestNotificationPermission() {
   if (!('Notification' in window)) return false;

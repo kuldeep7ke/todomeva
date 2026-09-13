@@ -34,6 +34,7 @@ export function renderCategoryPicker(selectedId, categories) {
             <button type="button" class="cat-option-main" data-cat-opt-main="${category.id}">
               <span class="category-dot" data-cat-dot="${category.id}" style="background:${category.color}"></span>
               <span class="cat-opt-name">${escapeHtml(category.name)}</span>
+              <i data-lucide="check" class="cat-opt-check"></i>
             </button>
             <span class="cat-opt-swatches">
               ${CATEGORY_COLORS.map((color) => `<button type="button" class="swatch ${color === category.color ? 'active' : ''}" data-cat-color="${category.id}" data-color="${color}" style="background:${color}" aria-label="${color}"></button>`).join('')}
@@ -63,7 +64,6 @@ export function bindCategoryPickers(root = document) {
         const color = option.querySelector('.category-dot').style.background;
         picker.querySelector('[data-cat-dot]').style.background = color;
         picker.querySelectorAll('.cat-option').forEach((row) => row.classList.toggle('selected', row === option));
-        closeOpenMenus();
       });
     });
     picker.querySelectorAll('[data-cat-color]').forEach((swatch) => {

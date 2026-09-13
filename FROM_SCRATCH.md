@@ -124,7 +124,7 @@ Because `http-server` is run with `-c-1` (no-cache headers) but the page is ofte
 
 - Every file is loaded with a `?v=N` query param (see `index.html` + each module import).
 - **Rule:** when you edit a module, bump its `?v=` in every importer. When you edit CSS/HTML entry file, bump its `?v=` in `index.html`.
-- Current versions (2026-09-13): `index.html` loads `style.css?v=16`, `js/app.js?v=8`; `app.js` imports `db.js?v=7`, `components.js?v=9`, `views.js?v=10`, `reminder.js?v=7`, `i18n.js?v=7`, `sync.js?v=6`; `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=7`, `prefs.js?v=4`, `sync.js?v=6`; `views.js` imports `components.js?v=9`, `db.js?v=7`, `i18n.js?v=7`, `prefs.js?v=4`, `account.js?v=4`, `sync.js?v=6`; `reminder.js`/`sync.js`/`recurrence.js` import `db.js?v=7`; `prefs.js?v=4`, `account.js?v=4`.
+- Current versions (2026-09-13): `index.html` loads `style.css?v=17`, `js/app.js?v=8`; `app.js` imports `db.js?v=7`, `components.js?v=10`, `views.js?v=10`, `reminder.js?v=7`, `i18n.js?v=7`, `sync.js?v=6`; `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=7`, `prefs.js?v=4`, `sync.js?v=6`; `views.js` imports `components.js?v=10`, `db.js?v=7`, `i18n.js?v=7`, `prefs.js?v=4`, `account.js?v=4`, `sync.js?v=6`; `reminder.js`/`sync.js`/`recurrence.js` import `db.js?v=7`; `prefs.js?v=4`, `account.js?v=4`.
 
 ---
 

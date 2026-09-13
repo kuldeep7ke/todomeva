@@ -1,7 +1,7 @@
-﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
+﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { t } from './i18n.js?v=7';
+import { getLang, t } from './i18n.js?v=8';
 import { isPrefEnabled } from './prefs.js?v=4';
 import { pushDeletion } from './sync.js?v=6';
 
@@ -45,6 +45,180 @@ export function renderCategoryPicker(selectedId, categories) {
   `;
 }
 
+export function priorityOptions() {
+  return [
+    { value: 'high', label: t('priority_high') },
+    { value: 'medium', label: t('priority_medium') },
+    { value: 'low', label: t('priority_low') },
+    { value: 'pending', label: t('priority_pending') }
+  ];
+}
+
+function recurrenceOptions() {
+  return [
+    { value: 'none', label: t('no_repeat') },
+    { value: 'daily', label: t('daily') },
+    { value: 'weekly', label: t('weekly') },
+    { value: 'monthly', label: t('monthly') },
+    { value: 'yearly', label: t('yearly') }
+  ];
+}
+
+function reminderOptions() {
+  return [
+    { value: '', label: t('no_reminder') },
+    { value: '15', label: t('reminder_15') },
+    { value: '60', label: t('reminder_60') },
+    { value: '1440', label: t('reminder_1440') }
+  ];
+}
+
+export function renderPicker(name, label, options, selectedValue) {
+  const selected = options.find((option) => String(option.value) === String(selectedValue)) || options[0];
+  return `
+    <div class="cat-picker" data-cat-picker>
+      <input type="hidden" name="${name}" value="${selected ? selected.value : ''}" />
+      <button type="button" class="cat-picker-trigger" data-cat-trigger>
+        <span data-cat-label>${escapeHtml(selected ? selected.label : label)}</span>
+        <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="cat-picker-menu hidden" data-cat-menu>
+        ${options.map((option) => `
+          <div class="cat-option ${String(selectedValue) === String(option.value) ? 'selected' : ''}" data-cat-opt="${option.value}">
+            <button type="button" class="cat-option-main" data-cat-opt-main="${option.value}">
+              <span class="cat-opt-name">${escapeHtml(option.label)}</span>
+              <i data-lucide="check" class="cat-opt-check"></i>
+            </button>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+const CAL_WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function intlLocale() {
+  return getLang() || 'en';
+}
+
+function formatDateLabel(value) {
+  if (!value) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
+}
+
+function calMonthTitle(year, month) {
+  return `${new Intl.DateTimeFormat(intlLocale(), { month: 'long' }).format(new Date(year, month, 1))} ${year}`;
+}
+
+function calWeekdayNames() {
+  const names = [];
+  for (let index = 0; index < 7; index += 1) {
+    const label = new Intl.DateTimeFormat(intlLocale(), { weekday: 'narrow' }).format(new Date(2026, 0, 4 + index));
+    names.push(label);
+  }
+  return names;
+}
+
+function calGrid(year, month, selectedValue) {
+  const first = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let index = 0; index < 42; index += 1) {
+    const day = index - first + 1;
+    if (day < 1 || day > daysInMonth) {
+      cells.push('<span class="cal-day empty"></span>');
+    } else {
+      const value = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const today = value === localDateStr();
+      const selected = value === selectedValue;
+      cells.push(`<button type="button" class="cal-day${selected ? ' selected' : ''}${today ? ' today' : ''}" data-cal-day="${value}" data-year="${year}" data-month="${month}" data-day="${day}">${day}</button>`);
+    }
+  }
+  return cells.join('');
+}
+
+export function renderDatePicker(value, name = 'dueDate') {
+  const current = value || '';
+  const view = current ? new Date(`${current}T12:00:00`) : new Date();
+  return `
+    <div class="cat-picker date-picker" data-date-picker>
+      <input type="hidden" name="${name}" value="${current}" />
+      <button type="button" class="cat-picker-trigger" data-date-trigger>
+        <i data-lucide="calendar"></i>
+        <span data-date-label>${escapeHtml(current ? formatDateLabel(current) : t('no_due_date'))}</span>
+        <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="cat-picker-menu cal-panel hidden" data-date-menu data-cal-year="${view.getFullYear()}" data-cal-month="${view.getMonth()}" data-cal-current="${current}">
+        ${calHeader(view.getFullYear(), view.getMonth())}
+        <div class="cal-weekdays">${calWeekdayNames().map((day) => `<span class="cal-weekday">${day}</span>`).join('')}</div>
+        <div class="cal-grid" data-cal-body>${calGrid(view.getFullYear(), view.getMonth(), current)}</div>
+        <button type="button" class="cal-clear" data-cal-clear>${t('clear')}</button>
+      </div>
+    </div>
+  `;
+}
+
+function calHeader(year, month) {
+  return `
+    <div class="cal-header">
+      <button type="button" class="icon-btn" data-cal-prev aria-label="prev">${icon('chevron-left')}</button>
+      <span class="cal-title">${calMonthTitle(year, month)}</span>
+      <button type="button" class="icon-btn" data-cal-next aria-label="next">${icon('chevron-right')}</button>
+    </div>
+  `;
+}
+
+function refreshCalView(picker) {
+  const menu = picker.querySelector('[data-date-menu]');
+  const year = Number(menu.dataset.calYear);
+  const month = Number(menu.dataset.calMonth);
+  picker.querySelector('.cal-header').outerHTML = calHeader(year, month);
+  picker.querySelector('[data-cal-body]').innerHTML = calGrid(year, month, picker.querySelector('input[type="hidden"]').value);
+  refreshIcons();
+}
+
+export function bindDatePickers(root = document) {
+  root.querySelectorAll('[data-date-picker]').forEach((picker) => {
+    if (picker.dataset.bound) return;
+    picker.dataset.bound = '1';
+    const trigger = picker.querySelector('[data-date-trigger]');
+    const menu = picker.querySelector('[data-date-menu]');
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeOpenMenus(picker);
+      menu.classList.toggle('hidden');
+    });
+    menu.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const prev = event.target.closest('[data-cal-prev]');
+      const next = event.target.closest('[data-cal-next]');
+      const clear = event.target.closest('[data-cal-clear]');
+      const day = event.target.closest('[data-cal-day]');
+      if (prev || next) {
+        const offset = prev ? -1 : 1;
+        let year = Number(menu.dataset.calYear);
+        let month = Number(menu.dataset.calMonth) + offset;
+        if (month < 0) { month = 11; year -= 1; }
+        if (month > 11) { month = 0; year += 1; }
+        menu.dataset.calYear = year;
+        menu.dataset.calMonth = month;
+        refreshCalView(picker);
+      } else if (clear) {
+        const input = picker.querySelector('input[type="hidden"]');
+        input.value = '';
+        picker.querySelector('[data-date-label]').textContent = t('no_due_date');
+        refreshCalView(picker);
+      } else if (day) {
+        const input = picker.querySelector('input[type="hidden"]');
+        input.value = day.dataset.calDay;
+        picker.querySelector('[data-date-label]').textContent = formatDateLabel(day.dataset.calDay);
+        refreshCalView(picker);
+      }
+    });
+  });
+}
+
 export function bindCategoryPickers(root = document) {
   root.querySelectorAll('[data-cat-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
@@ -59,10 +233,14 @@ export function bindCategoryPickers(root = document) {
         event.stopPropagation();
         const id = btn.dataset.catOptMain;
         const option = picker.querySelector(`[data-cat-opt="${id}"]`);
-        picker.querySelector('input[name="categoryId"]').value = id;
+        const input = picker.querySelector('input[type="hidden"]');
+        if (input) input.value = id;
         picker.querySelector('[data-cat-label]').textContent = option.querySelector('.cat-opt-name').textContent;
-        const color = option.querySelector('.category-dot').style.background;
-        picker.querySelector('[data-cat-dot]').style.background = color;
+        const dot = option.querySelector('.category-dot');
+        if (dot) {
+          const dotEl = picker.querySelector('[data-cat-dot]');
+          if (dotEl) dotEl.style.background = dot.style.background;
+        }
         picker.querySelectorAll('.cat-option').forEach((row) => row.classList.toggle('selected', row === option));
       });
     });
@@ -85,14 +263,14 @@ export function bindCategoryPickers(root = document) {
 }
 
 function closeOpenMenus(except = null) {
-  document.querySelectorAll('[data-cat-menu]:not(.hidden)').forEach((menu) => {
-    if (except && menu.closest('[data-cat-picker]') === except) return;
+  document.querySelectorAll('[data-cat-menu]:not(.hidden), [data-date-menu]:not(.hidden)').forEach((menu) => {
+    if (except && menu.closest('[data-cat-picker], [data-date-picker]') === except) return;
     menu.classList.add('hidden');
   });
 }
 
 document.addEventListener('click', (event) => {
-  if (!event.target.closest('[data-cat-picker]')) closeOpenMenus();
+  if (!event.target.closest('[data-cat-picker], [data-date-picker]')) closeOpenMenus();
 });
 
 export function renderSidebar(categories, tasks, activeView) {
@@ -270,6 +448,7 @@ async function renderQuickAddForm() {
   const form = body.querySelector('#create-task-form');
   if (form) form.addEventListener('submit', submitCreateTask);
   bindCategoryPickers(body);
+  bindDatePickers(body);
   refreshIcons();
 }
 
@@ -317,6 +496,7 @@ export async function openTaskDetail(id) {
   document.querySelector('[data-close-task]').addEventListener('click', closeTaskModal);
   document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
   bindCategoryPickers(document.querySelector('#task-modal-body'));
+  bindDatePickers(document.querySelector('#task-modal-body'));
   refreshIcons();
 }
 
@@ -328,13 +508,13 @@ function taskForm(task, categories, id) {
       <textarea class="textarea" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
       <div class="two-col form-grid">
         ${renderCategoryPicker(task.categoryId, categories)}
-        <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>${t('priority_high')}</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>${t('priority_medium')}</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>${t('priority_low')}</option><option value="pending" ${task.priority === 'pending' ? 'selected' : ''}>${t('priority_pending')}</option></select>
+        ${renderPicker('priority', t('priority_medium'), priorityOptions(), task.priority || 'medium')}
       </div>
       <div class="two-col form-grid">
-        <input class="field" type="date" name="dueDate" value="${task.dueDate || ''}" />
-        <select class="select" name="recurrence"><option value="none" ${task.recurrence === 'none' ? 'selected' : ''}>${t('no_repeat')}</option><option value="daily" ${task.recurrence === 'daily' ? 'selected' : ''}>${t('daily')}</option><option value="weekly" ${task.recurrence === 'weekly' ? 'selected' : ''}>${t('weekly')}</option><option value="monthly" ${task.recurrence === 'monthly' ? 'selected' : ''}>${t('monthly')}</option><option value="yearly" ${task.recurrence === 'yearly' ? 'selected' : ''}>${t('yearly')}</option></select>
+        ${renderDatePicker(task.dueDate || '')}
+        ${renderPicker('recurrence', t('no_repeat'), recurrenceOptions(), task.recurrence || 'none')}
       </div>
-      <select class="select" name="reminder"><option value="">${t('no_reminder')}</option><option value="15">${t('reminder_15')}</option><option value="60">${t('reminder_60')}</option><option value="1440">${t('reminder_1440')}</option></select>
+      ${renderPicker('reminder', t('no_reminder'), reminderOptions(), task.reminders?.[0]?.minutesBefore ? String(task.reminders[0].minutesBefore) : '')}
       <input class="field" type="number" name="focusMinutes" min="0" step="1" placeholder="${t('focus_min_ph')}" value="${task.focusMinutes ? Number(task.focusMinutes) : ''}" />
       <button class="btn btn-primary" type="submit">${t('save_task')}</button>
     </form>

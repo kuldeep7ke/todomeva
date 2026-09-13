@@ -1,7 +1,7 @@
 ﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
-import { attachTaskCardEvents, bindCategoryPickers, icon, renderCategoryPicker, renderTaskCard, refreshIcons } from './components.js?v=10';
-import { t } from './i18n.js?v=7';
-import { getLang, getLangs } from './i18n.js?v=7';
+import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=11';
+import { t } from './i18n.js?v=8';
+import { getLang, getLangs } from './i18n.js?v=8';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
 import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=6';
@@ -18,7 +18,7 @@ export async function renderDashboard() {
     <section class="grid stats-grid">
       ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required />${renderCategoryPicker(0, categories)}<select class="select" name="priority"><option value="medium">${t('priority_medium')}</option><option value="high">${t('priority_high')}</option><option value="low">${t('priority_low')}</option><option value="pending">${t('priority_pending')}</option></select><button class="btn btn-primary">${t('add')}</button></form></section>
+    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required />${renderCategoryPicker(0, categories)}${renderPicker('priority', t('priority_medium'), priorityOptions(), 'medium')}<button class="btn btn-primary">${t('add')}</button></form></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}

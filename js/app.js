@@ -1,10 +1,9 @@
 ﻿import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
-import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=10';
-import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=10';
+import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=11';
+import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=11';
 import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
-import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=7';
+import { initLang, setLang, t } from './i18n.js?v=8';
 import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=6';
 
 let activeView = 'dashboard';

@@ -1,7 +1,7 @@
 ﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
 import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=11';
-import { t } from './i18n.js?v=8';
-import { getLang, getLangs } from './i18n.js?v=8';
+import { t } from './i18n.js?v=9';
+import { getLang, getLangs } from './i18n.js?v=9';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
 import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=6';
@@ -143,27 +143,37 @@ export async function renderSettings() {
   const profile = getProfile();
   const sync = getSyncStatus();
   const syncConfig = getSyncConfig();
-  const initials = profile.name ? profile.name.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase() : 'TM';
+  const profileLine = [profile.name, profile.email].filter(Boolean).join(' · ') || t('s_account');
 
   content.innerHTML = `
     <div class="grid settings-grid settings-grid-full">
-      ${settingsCardIcon('s_account', 's_account_desc', '', icon('circle-user'), `
-        <div class="profile-head">
-          <div class="profile-avatar">${escapeHtml(initials)}</div>
+      ${settingsCard('s_account', 's_account_desc', `
+        <div class="settings-row">
+          <div class="settings-row-icon">${icon('pencil')}</div>
           <div class="settings-row-copy">
-            <strong>${escapeHtml(profile.name || t('s_account'))}</strong>
-            <span class="muted">${escapeHtml(profile.email || 'No email')}</span>
+            <strong>${t('s_edit_profile')}</strong>
+            <span class="muted profile-line">${escapeHtml(profileLine)}</span>
           </div>
+          <button class="btn btn-ghost icon-btn" data-settings-action="edit-profile" aria-label="${t('s_edit_profile')}">${icon('chevron-right')}</button>
         </div>
-        <form id="profile-form" class="hidden sync-form">
-          <input class="field" id="profile-name" placeholder="${t('s_name')}" value="${escapeAttr(profile.name || '')}" />
-          <input class="field" id="profile-email" type="email" placeholder="${t('s_email')}" value="${escapeAttr(profile.email || '')}" />
-          <div class="sync-actions"><button class="btn btn-primary" data-settings-action="profile-save">${t('s_profile_save')}</button><button class="btn btn-ghost" type="button" data-settings-action="profile-cancel">${t('s_profile_cancel')}</button></div>
+        <form id="profile-form" class="hidden profile-form" autocomplete="off">
+          <div class="profile-form-grid">
+            <div class="field-group">
+              <label class="flabel" for="profile-name">${t('s_name')}</label>
+              <input class="field" id="profile-name" placeholder="${t('s_name')}" value="${escapeAttr(profile.name || '')}" />
+            </div>
+            <div class="field-group">
+              <label class="flabel" for="profile-email">${t('s_email')}</label>
+              <input class="field" id="profile-email" type="email" placeholder="${t('s_email')}" value="${escapeAttr(profile.email || '')}" />
+            </div>
+          </div>
+          <p class="muted profile-form-hint">${t('s_privacy_desc')}</p>
+          <div class="profile-form-actions">
+            <button class="btn btn-ghost" type="button" data-settings-action="profile-cancel">${t('s_profile_cancel')}</button>
+            <button class="btn btn-primary" type="button" data-settings-action="profile-save">${t('s_profile_save')}</button>
+          </div>
         </form>
-        <div class="sync-actions">
-          <button class="btn btn-ghost" data-settings-action="edit-profile">${t('s_edit_profile')}</button>
-          <button class="btn btn-ghost" data-settings-action="open-landing">${t('s_open_landing')}</button>
-        </div>
+        ${settingsRow('home', 's_open_landing', 's_open_landing_desc', `<button class="btn btn-ghost icon-btn" data-settings-action="open-landing" aria-label="${t('s_open_landing')}">${icon('arrow-up-right')}</button>`)}
       `)}
       ${settingsCard('s_appearance', 's_appearance_desc', `
         ${settingsRow('moon', 's_dark_mode', 's_dark_mode_desc', `<button class="setting-switch ${isDark ? 'on' : ''}" role="switch" aria-checked="${isDark}" aria-label="${t('s_dark_mode')}" data-settings-action="dark-mode"></button>`)}

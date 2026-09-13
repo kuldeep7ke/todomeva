@@ -184,33 +184,28 @@ export async function renderSettings() {
             <button class="palette-chip ${brand === 'green' ? 'active' : ''}" style="--chip:#16a34a" data-settings-action="brand" data-brand="green" aria-label="${t('s_color_green')}">${t('s_color_green')}</button>
           </div>`)}
       `)}
-      ${settingsCardIcon('s_language', 's_language_desc', 'purple', icon('languages'), `
-        <div class="segmented">
-          ${(['en', 'mr', 'hi']).map((code) => `<button class="${getLang() === code ? 'active' : ''}" data-settings-action="lang" data-lang="${code}">${getLangs()[code]}</button>`).join('')}
-        </div>`)}
+      ${settingsCard('s_language', 's_language_desc', `
+        ${settingsRow('globe', 's_en', 's_en_desc', `<button class="${getLang() === 'en' ? 'active' : ''}" data-settings-action="lang" data-lang="en">${getLangs()['en']}</button>`)}
+        ${settingsRow('globe', 's_mr', 's_mr_desc', `<button class="${getLang() === 'mr' ? 'active' : ''}" data-settings-action="lang" data-lang="mr">${getLangs()['mr']}</button>`)}
+        ${settingsRow('globe', 's_hi', 's_hi_desc', `<button class="${getLang() === 'hi' ? 'active' : ''}" data-settings-action="lang" data-lang="hi">${getLangs()['hi']}</button>`)}
+      `)}
       ${settingsCardIcon('s_notifications', 's_notifications_desc', 'blue', icon('bell-ring'), `
         ${settingsRow('bell', 's_notif_reminders', 's_notif_reminders_desc', `<button class="setting-switch ${notifyPrefs.reminders ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.reminders}" aria-label="${t('s_notif_reminders')}" data-settings-action="pref-reminders"></button>`)}
         ${settingsRow('message-circle', 's_notif_popups', 's_notif_popups_desc', `<button class="setting-switch ${notifyPrefs.onboarding ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.onboarding}" aria-label="${t('s_notif_popups')}" data-settings-action="pref-onboarding"></button>`)}
         ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notificationsAvailable && Notification.permission === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
       `)}
-      ${settingsCardIcon('s_sync', 's_sync_desc', 'blue', icon('refresh-cw'), `
+      ${settingsCard('s_sync', 's_sync_desc', `
         <div class="sync-status-row">
           <span class="sync-dot" data-state="${sync.status}"></span>
           <strong id="sync-status-label">${syncStatusLabel()}</strong>
           <span class="muted" id="sync-last-label">${sync.lastSync ? `${t('s_sync_last')} ${formatLastSync(sync.lastSync)}` : ''}</span>
         </div>
         ${sync.error ? `<p class="muted sync-error">${escapeHtml(sync.error)}</p>` : ''}
-        <form id="sync-connect-form" class="sync-form">
-          <input class="field" id="sync-url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(syncConfig?.url || '')}" autocomplete="off" />
-          <input class="field" id="sync-key" type="password" placeholder="${t('s_sync_key_ph')}" value="${escapeAttr(syncConfig?.key || '')}" autocomplete="off" />
-          <div class="sync-actions">
-            <button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>
-            <button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>
-            <button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>
-          </div>
-        </form>
-        <details class="sync-how">
-          <summary>${t('s_sync_how_title')}</summary>
+        ${settingsRow('link', 's_sync_connect', 's_sync_connect_desc', `<button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>`)}
+        ${settingsRow('refresh-cw', 's_sync_now', 's_sync_now_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>`)}
+        ${settingsRow('x', 's_sync_disconnect', 's_sync_disconnect_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>`)}
+        ${settingsRow('info', 's_sync_how_title', 's_sync_how_desc', `<button class="btn btn-ghost icon-btn sync-how-trigger" type="button" data-settings-action="sync-how-trigger">${t('s_sync_how_title')}</button>`)}
+        <div id="sync-how-details" class="hidden">
           <ol>
             <li>${t('s_sync_sql_step1')}</li>
             <li>${t('s_sync_sql_step2')}</li>
@@ -218,8 +213,8 @@ export async function renderSettings() {
             <li>${t('s_sync_sql_step4')}</li>
           </ol>
           <pre id="sync-sql">${escapeHtml(SCHEMA_SQL)}</pre>
-          <button class="btn btn-ghost" data-settings-action="sync-copy-sql">${t('s_sync_copy_sql')}</button>
-        </details>
+          ${settingsRow('copy', 's_sync_copy_sql', 's_sync_copy_sql_desc', `<button class="btn btn-ghost" data-settings-action="sync-copy-sql">${t('s_sync_copy_sql')}</button>`)}
+        </div>
       `)}
       ${settingsCard('s_data', 's_data_desc', `
         ${settingsRow('download', 's_export', 's_export_desc', `<button class="btn btn-ghost" data-settings-action="export">${t('export')}</button>`)}

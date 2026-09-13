@@ -286,6 +286,10 @@ async function runSettingsAction(action) {
     await copySyncSql(action);
     return;
   }
+  if (key === 'sync-how-trigger') {
+    document.querySelector('#sync-how-details')?.classList.toggle('hidden');
+    return;
+  }
   if (key === 'danger-show') {
     const main = document.querySelector('#danger-main');
     const panel = document.querySelector('#danger-confirm');

@@ -4,6 +4,9 @@
 # Screenshot debug images at repo root
 /*.png
 
+# Brainstorm visual-companion mockups
+.superpowers/
+
 # Node / OS junk
 node_modules/
 *.log

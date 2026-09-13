@@ -73,12 +73,13 @@ function reminderOptions() {
   ];
 }
 
-export function renderPicker(name, label, options, selectedValue) {
+export function renderPicker(name, label, options, selectedValue, iconName = '') {
   const selected = options.find((option) => String(option.value) === String(selectedValue)) || options[0];
   return `
     <div class="cat-picker" data-cat-picker>
       <input type="hidden" name="${name}" value="${selected ? selected.value : ''}" />
       <button type="button" class="cat-picker-trigger" data-cat-trigger>
+        ${iconName ? `<i data-lucide="${iconName}"></i>` : ''}
         <span data-cat-label>${escapeHtml(selected ? selected.label : label)}</span>
         <i data-lucide="chevron-down"></i>
       </button>
@@ -186,8 +187,11 @@ export function bindDatePickers(root = document) {
     const menu = picker.querySelector('[data-date-menu]');
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
+      const wasOpen = !menu.classList.contains('hidden');
       closeOpenMenus(picker);
-      menu.classList.toggle('hidden');
+      if (wasOpen) return;
+      menu.classList.remove('hidden');
+      anchorMenuWithinModal(picker, menu);
     });
     menu.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -225,8 +229,12 @@ export function bindCategoryPickers(root = document) {
     picker.dataset.bound = '1';
     picker.querySelector('[data-cat-trigger]').addEventListener('click', (event) => {
       event.stopPropagation();
+      const menu = picker.querySelector('[data-cat-menu]');
+      const wasOpen = !menu.classList.contains('hidden');
       closeOpenMenus(picker);
-      picker.querySelector('[data-cat-menu]').classList.toggle('hidden');
+      if (wasOpen) return;
+      menu.classList.remove('hidden');
+      anchorMenuWithinModal(picker, menu);
     });
     picker.querySelectorAll('[data-cat-opt-main]').forEach((btn) => {
       btn.addEventListener('click', (event) => {
@@ -266,12 +274,43 @@ function closeOpenMenus(except = null) {
   document.querySelectorAll('[data-cat-menu]:not(.hidden), [data-date-menu]:not(.hidden)').forEach((menu) => {
     if (except && menu.closest('[data-cat-picker], [data-date-picker]') === except) return;
     menu.classList.add('hidden');
+    menu.style.cssText = '';
   });
+}
+
+function anchorMenuWithinModal(picker, menu) {
+  if (!menu.closest('.modal-card')) return;
+  const trigger = menu.parentElement.querySelector('[data-date-trigger]') || menu.parentElement.querySelector('[data-cat-trigger]');
+  if (!trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const isDateMenu = Boolean(menu.querySelector('[data-cal-body]'));
+  const width = isDateMenu ? menu.offsetWidth : rect.width;
+  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8);
+  const menuHeight = menu.offsetHeight;
+  const spaceBelow = window.innerHeight - rect.bottom - 10;
+  menu.style.position = 'fixed';
+  menu.style.left = `${left}px`;
+  menu.style.minWidth = '0';
+  if (!isDateMenu) menu.style.width = `${rect.width}px`;
+  if (menuHeight <= spaceBelow) {
+    menu.style.top = `${rect.bottom + 6}px`;
+    return;
+  }
+  const spaceAbove = rect.top - 10;
+  if (menuHeight <= spaceAbove) {
+    menu.style.top = `${rect.top - menuHeight - 6}px`;
+    return;
+  }
+  menu.style.top = '10px';
+  menu.style.maxHeight = `${Math.max(60, spaceAbove)}px`;
+  menu.style.overflowY = 'auto';
 }
 
 document.addEventListener('click', (event) => {
   if (!event.target.closest('[data-cat-picker], [data-date-picker]')) closeOpenMenus();
 });
+
+document.querySelectorAll('.modal-card').forEach((card) => card.addEventListener('scroll', () => closeOpenMenus()));
 
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
@@ -439,8 +478,8 @@ async function renderQuickAddForm() {
     const category = categories.find((item) => item.id === selectedCategoryId);
     const templates = await getTemplatesByCategory(selectedCategoryId);
     body.innerHTML = `
-      <div class="modal-header"><div><p class="eyebrow">${escapeHtml(category?.name || '')}</p><h3>${t('create_task')}</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
-      <div class="template-row">${templates.map((template) => `<button class="template-chip" data-template='${JSON.stringify(template)}'>${escapeHtml(template.title)}</button>`).join('')}</div>
+      <div class="modal-header"><div><h3>${category?.name ? `<span class="hdr-accent">${escapeHtml(category.name)},</span> ` : ''}${t('create_task')}</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
+      ${templates.length ? `<span class="flabel">${t('field_quick_task')}</span><div class="template-row">${templates.map((template) => `<button class="template-chip" type="button" data-template='${JSON.stringify(template)}'>${escapeHtml(template.title)}</button>`).join('')}</div>` : ''}
       ${taskForm({ categoryId: selectedCategoryId, priority: 'medium', recurrence: 'none' }, categories, 'create-task-form')}
     `;
   }
@@ -452,18 +491,58 @@ async function renderQuickAddForm() {
   refreshIcons();
 }
 
+function clearQuickTask() {
+  const form = document.querySelector('#create-task-form');
+  if (!form) return;
+  form.title.value = '';
+  form.description.value = '';
+  form.priority.value = 'medium';
+  form.templateId.value = '';
+}
+
 async function handleQuickAddClick(event) {
   const close = event.target.closest('.close-modal-btn');
   const category = event.target.closest('[data-pick-category]');
-  const template = event.target.closest('[data-template]');
+  const cancel = event.target.closest('[data-cancel-modal]');
+  const chipClear = event.target.closest('[data-template-clear]');
+  const template = chipClear ? null : event.target.closest('[data-template]');
   if (close) closeQuickAdd();
+  if (cancel) {
+    closeQuickAdd();
+    return;
+  }
   if (category) {
     selectedCategoryId = Number(category.dataset.pickCategory);
     await renderQuickAddForm();
+    return;
+  }
+  if (chipClear) {
+    const chip = chipClear.closest('.template-chip');
+    if (chip) chip.classList.remove('active');
+    chipClear.remove();
+    clearQuickTask();
+    return;
   }
   if (template) {
-    const data = JSON.parse(template.dataset.template);
     const form = document.querySelector('#create-task-form');
+    const wasActive = template.classList.contains('active');
+    document.querySelectorAll('.template-chip').forEach((chip) => {
+      chip.classList.remove('active');
+      chip.querySelector('[data-template-clear]')?.remove();
+    });
+    if (wasActive) {
+      clearQuickTask();
+      return;
+    }
+    template.classList.add('active');
+    const clearEl = document.createElement('span');
+    clearEl.className = 'template-chip-clear';
+    clearEl.dataset.templateClear = '1';
+    clearEl.setAttribute('role', 'button');
+    clearEl.setAttribute('aria-label', t('clear_quick_task'));
+    clearEl.innerHTML = icon('x');
+    template.appendChild(clearEl);
+    const data = JSON.parse(template.dataset.template);
     form.title.value = data.title;
     form.description.value = data.description;
     form.priority.value = data.priority;
@@ -483,9 +562,8 @@ export async function openTaskDetail(id) {
   const categories = await getCategories();
   document.querySelector('#task-modal').classList.remove('hidden');
   document.querySelector('#task-modal-body').innerHTML = `
-    <div class="modal-header"><div><p class="eyebrow">${t('edit_task')}</p><h3>${escapeHtml(task.title)}</h3></div><button class="icon-btn" data-close-task>${icon('x')}</button></div>
+    <div class="modal-header"><div><h3><span class="hdr-accent">${t('edit_task')}:</span> ${escapeHtml(task.title)}</h3></div><button class="icon-btn" data-close-task>${icon('x')}</button></div>
     ${taskForm(task, categories, 'edit-task-form')}
-    <div class="hero-actions"><button class="btn btn-danger" data-delete-task="${task.id}">${t('delete_task')}</button></div>
   `;
   document.querySelector('#edit-task-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -494,29 +572,52 @@ export async function openTaskDetail(id) {
     window.refreshCurrentView();
   });
   document.querySelector('[data-close-task]').addEventListener('click', closeTaskModal);
+  document.querySelector('[data-cancel-modal]')?.addEventListener('click', closeTaskModal);
   document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
   bindCategoryPickers(document.querySelector('#task-modal-body'));
   bindDatePickers(document.querySelector('#task-modal-body'));
   refreshIcons();
 }
 
+function focusOptions() {
+  return [
+    { value: '', label: t('focus_off') },
+    { value: '15', label: t('focus_15') },
+    { value: '25', label: t('focus_25') },
+    { value: '45', label: t('focus_45') },
+    { value: '60', label: t('focus_60') }
+  ];
+}
+
 function taskForm(task, categories, id) {
+  const isEdit = Boolean(task.id);
+  const focus = task.focusMinutes ? String(task.focusMinutes) : '';
   return `
     <form id="${id}" class="form-grid">
       <input type="hidden" name="templateId" value="${task.templateId || ''}" />
-      <input class="field" name="title" placeholder="${t('task_title_placeholder')}" value="${escapeAttr(task.title || '')}" required />
-      <textarea class="textarea" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
+      <label class="flabel" for="${id}-title">${t('field_task_title')} <span class="req" aria-hidden="true">*</span><span class="sr-only">(${t('required')})</span></label>
+      <input class="field" id="${id}-title" name="title" placeholder="${t('task_title_placeholder')}" value="${escapeAttr(task.title || '')}" required aria-required="true" />
+      <label class="flabel" for="${id}-desc">${t('field_description')}</label>
+      <textarea class="textarea" id="${id}-desc" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
+      <div class="section-label">${t('field_details')}</div>
       <div class="two-col form-grid">
-        ${renderCategoryPicker(task.categoryId, categories)}
-        ${renderPicker('priority', t('priority_medium'), priorityOptions(), task.priority || 'medium')}
+        <div><label class="flabel">${t('field_category')}</label>${renderCategoryPicker(task.categoryId, categories)}</div>
+        <div><label class="flabel">${t('field_priority')}</label>${renderPicker('priority', t('priority_medium'), priorityOptions(), task.priority || 'medium', 'flag')}</div>
       </div>
       <div class="two-col form-grid">
-        ${renderDatePicker(task.dueDate || '')}
-        ${renderPicker('recurrence', t('no_repeat'), recurrenceOptions(), task.recurrence || 'none')}
+        <div><label class="flabel">${t('field_due_date')}</label>${renderDatePicker(task.dueDate || '')}</div>
+        <div><label class="flabel">${t('field_repeat')}</label>${renderPicker('recurrence', t('no_repeat'), recurrenceOptions(), task.recurrence || 'none', 'repeat')}</div>
       </div>
-      ${renderPicker('reminder', t('no_reminder'), reminderOptions(), task.reminders?.[0]?.minutesBefore ? String(task.reminders[0].minutesBefore) : '')}
-      <input class="field" type="number" name="focusMinutes" min="0" step="1" placeholder="${t('focus_min_ph')}" value="${task.focusMinutes ? Number(task.focusMinutes) : ''}" />
-      <button class="btn btn-primary" type="submit">${t('save_task')}</button>
+      <div><label class="flabel">${t('field_reminder')}</label>${renderPicker('reminder', t('no_reminder'), reminderOptions(), task.reminders?.[0]?.minutesBefore ? String(task.reminders[0].minutesBefore) : '', 'bell')}</div>
+      <div><label class="flabel">${t('field_focus')}</label>${renderPicker('focusMinutes', t('focus_off'), focusOptions(), focus, 'timer')}</div>
+      <div class="modal-footer">
+        <span class="footer-hint">${t('form_footer_hint')}</span>
+        <div class="footer-actions">
+          ${isEdit ? `<button type="button" class="btn btn-danger" data-delete-task="${task.id}">${t('delete_task')}</button>` : ''}
+          <button type="button" class="btn" data-cancel-modal>${t('cancel')}</button>
+          <button class="btn btn-primary" type="submit">${t('save_task')}</button>
+        </div>
+      </div>
     </form>
   `;
 }

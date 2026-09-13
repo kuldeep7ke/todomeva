@@ -1,5 +1,5 @@
 ﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=6';
-import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=6';
+import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=7';
 import { t } from './i18n.js?v=7';
 import { getLang, getLangs } from './i18n.js?v=7';
 import { getNotifyPrefs } from './prefs.js?v=4';

@@ -33,13 +33,13 @@ export function renderSidebar(categories, tasks, activeView) {
           ['priority', 'flag', t('priority_matrix'), ''],
           ['done', 'check-check', t('done'), ''],
           ['archive', 'archive', t('archive'), archivedCount ? String(archivedCount) : '']
-        ].map(([view, iconName, label, count]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span>${count ? `<span class="count-pill">${count}</span>` : ''}</button>`).join('')}
+        ].map(([view, iconName, label, count]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}${count ? `<span class="count-pill">${count}</span>` : ''}<span>${label}</span></button>`).join('')}
       </div>
       <div class="sidebar-section">
         <p class="sidebar-title">${t('categories')}</p>
         ${categories.map((category) => `
           <button class="category-item ${activeView === `category:${category.id}` ? 'active' : ''}" data-category-id="${category.id}">
-            <span class="category-dot" style="background:${category.color}"></span><span>${escapeHtml(category.name)}</span><span class="count-pill">${countByCategory[category.id] || 0}</span>
+            <span class="category-dot" style="background:${category.color}"></span><span class="count-pill">${countByCategory[category.id] || 0}</span><span>${escapeHtml(category.name)}</span>
           </button>`).join('')}
       </div>
     </div>

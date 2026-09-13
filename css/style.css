@@ -319,9 +319,10 @@ a { color: inherit; text-decoration: none; }
 
 /* ── Category Grid ── */
 .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.category-card { border: 1px solid var(--border); background: var(--surface); border-radius: 18px; padding: 16px; text-align: left; }
-.template-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.template-chip { border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); padding: 0.5rem 0.8rem; font-weight: 700; }
+.category-card { border: 1px solid var(--border); background: var(--surface); border-radius: 18px; padding: 16px; text-align: left; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease; }
+.category-card:hover { background: var(--surface-soft); border-color: var(--accent); }
+.template-row { display: flex; gap: 8px; row-gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.template-chip { border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); padding: 0.3rem 0.7rem; font-size: 0.8rem; font-weight: 700; line-height: 1.3; }
 .form-grid { display: grid; gap: 12px; }
 .two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
@@ -337,8 +338,6 @@ a { color: inherit; text-decoration: none; }
 .flabel { display: block; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px 2px; }
 .flabel .req { color: var(--danger); }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.section-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent-strong); margin: 16px 2px 8px; }
-.field + .section-label { margin-top: 4px; }
 .template-chip { cursor: pointer; }
 .template-chip.active { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); display: inline-flex; align-items: center; gap: 6px; }
 .template-chip-clear { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: white; }
@@ -448,7 +447,7 @@ a { color: inherit; text-decoration: none; }
   .category-card { padding: 14px; display: flex; align-items: center; gap: 12px; }
   .category-card h3 { margin: 0; font-size: 0.95rem; }
   .category-card p { display: none; }
-  .template-chip { font-size: 0.82rem; padding: 0.45rem 0.7rem; }
+  .template-chip { font-size: 0.78rem; padding: 0.26rem 0.6rem; }
 
   /* ── Stats ── */
   .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }

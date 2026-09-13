@@ -1,7 +1,7 @@
 ﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { getLang, t } from './i18n.js?v=8';
+import { getLang, t } from './i18n.js?v=9';
 import { isPrefEnabled } from './prefs.js?v=4';
 import { pushDeletion } from './sync.js?v=6';
 
@@ -599,7 +599,6 @@ function taskForm(task, categories, id) {
       <input class="field" id="${id}-title" name="title" placeholder="${t('task_title_placeholder')}" value="${escapeAttr(task.title || '')}" required aria-required="true" />
       <label class="flabel" for="${id}-desc">${t('field_description')}</label>
       <textarea class="textarea" id="${id}-desc" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
-      <div class="section-label">${t('field_details')}</div>
       <div class="two-col form-grid">
         <div><label class="flabel">${t('field_category')}</label>${renderCategoryPicker(task.categoryId, categories)}</div>
         <div><label class="flabel">${t('field_priority')}</label>${renderPicker('priority', t('priority_medium'), priorityOptions(), task.priority || 'medium', 'flag')}</div>

@@ -1,4 +1,4 @@
-import { SEED_CATEGORIES, buildSeedTemplates } from './seed.js?v=1';
+﻿import { SEED_CATEGORIES, buildSeedTemplates } from './seed.js?v=4';
 
 const DexieCtor = window.Dexie;
 
@@ -8,12 +8,69 @@ if (!DexieCtor) {
 
 export const db = new DexieCtor('TodoMevaDB');
 
-db.version(2).stores({
-  categories: '++id, name, order',
-  templates: '++id, categoryId, order',
-  tasks: '++id, categoryId, priority, status, dueDate, createdAt, completedAt, parentTaskId',
-  activities: '++id, type, taskId, timestamp'
+db.version(3).stores({
+  categories: '++id, uuid, name, order',
+  templates: '++id, uuid, categoryId, order',
+  tasks: '++id, uuid, categoryId, priority, status, dueDate, createdAt, completedAt, parentTaskId',
+  activities: '++id, uuid, type, taskId, timestamp'
+}).upgrade(async (tx) => {
+  await ensureUuids(tx);
 });
+
+export function makeUuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function slugify(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+}
+
+export function categorySeedUuid(name) {
+  return `seed-cat-${slugify(name)}`;
+}
+
+export function templateSeedUuid(categoryName, order) {
+  return `seed-tpl-${slugify(categoryName)}-${order}`;
+}
+
+export async function ensureUuids(tx = db) {
+  const catMap = new Map((await tx.table('categories').toArray()).map((c) => [c.id, c]));
+  await tx.table('categories').toCollection().modify((row) => {
+    const seed = SEED_CATEGORIES.some((s) => s.name === row.name);
+    row.uuid = seed ? categorySeedUuid(row.name) : (row.uuid || makeUuid());
+  });
+  const templates = await tx.table('templates').toArray();
+  await tx.table('templates').toCollection().modify((row) => {
+    const name = catMap.get(row.categoryId)?.name || '';
+    const isSeed = SEED_CATEGORIES.some((s) => s.name === name);
+    row.uuid = isSeed ? templateSeedUuid(name, row.order) : (row.uuid || makeUuid());
+  });
+  await tx.table('tasks').toCollection().modify((row) => { if (!row.uuid) row.uuid = makeUuid(); });
+  await tx.table('activities').toCollection().modify((row) => { if (!row.uuid) row.uuid = makeUuid(); });
+}
+
+export function getByUuid(table, uuid) {
+  return db.table(table).where('uuid').equals(uuid).first();
+}
+
+export async function seedDatabase() {
+  if (await db.categories.count()) return;
+  await db.transaction('rw', db.categories, db.templates, async () => {
+    const categories = SEED_CATEGORIES.map((c) => ({ ...c, uuid: categorySeedUuid(c.name) }));
+    await db.categories.bulkAdd(categories);
+    const inserted = await db.categories.orderBy('order').toArray();
+    const templates = buildSeedTemplates(inserted).map((t) => ({
+      ...t,
+      uuid: templateSeedUuid(inserted.find((c) => c.id === t.categoryId)?.name || '', t.order)
+    }));
+    await db.templates.bulkAdd(templates);
+  });
+}
 
 export function localDateStr(date = new Date()) {
   const value = new Date(date);
@@ -28,15 +85,6 @@ export function localDateTimeStr(date = new Date()) {
   const hours = String(value.getHours()).padStart(2, '0');
   const minutes = String(value.getMinutes()).padStart(2, '0');
   return `${localDateStr(value)}T${hours}:${minutes}`;
-}
-
-export async function seedDatabase() {
-  if (await db.categories.count()) return;
-  await db.transaction('rw', db.categories, db.templates, async () => {
-    await db.categories.bulkAdd(SEED_CATEGORIES);
-    const categories = await db.categories.orderBy('order').toArray();
-    await db.templates.bulkAdd(buildSeedTemplates(categories));
-  });
 }
 
 export async function getCategories() {
@@ -58,6 +106,7 @@ export async function getTask(id) {
 export async function addTask(task) {
   const now = localDateTimeStr();
   const id = await db.tasks.add({
+    uuid: makeUuid(),
     title: task.title.trim(),
     description: task.description?.trim() || '',
     categoryId: Number(task.categoryId),
@@ -100,11 +149,11 @@ export async function setTaskStatus(id, status) {
 }
 
 export async function addCategory(category) {
-  return db.categories.add({ ...category, order: Date.now() });
+  return db.categories.add({ ...category, uuid: makeUuid(), order: Date.now() });
 }
 
 export async function addActivity(type, taskId, taskTitle, details = '') {
-  return db.activities.add({ type, taskId, taskTitle, details, timestamp: localDateTimeStr() });
+  return db.activities.add({ uuid: makeUuid(), type, taskId, taskTitle, details, timestamp: localDateTimeStr() });
 }
 
 export async function exportData() {
@@ -125,4 +174,5 @@ export async function importData(data) {
     if (data.tasks?.length) await db.tasks.bulkPut(data.tasks);
     if (data.activities?.length) await db.activities.bulkPut(data.activities);
   });
+  await ensureUuids(db);
 }

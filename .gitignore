@@ -1,0 +1,11 @@
+# Test / browser automation artifacts
+.playwright-mcp/
+
+# Screenshot debug images at repo root
+/*.png
+
+# Node / OS junk
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

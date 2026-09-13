@@ -1,6 +1,8 @@
-import { addTask, deleteTask, getCategories, getTask, getTemplatesByCategory, updateTask, setTaskStatus } from './db.js?v=1';
-import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=1';
-import { createRecurringTaskInstance } from './recurrence.js?v=1';
+﻿import { addTask, deleteTask, getCategories, getTask, getTemplatesByCategory, updateTask, setTaskStatus } from './db.js?v=4';
+import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=4';
+import { createRecurringTaskInstance } from './recurrence.js?v=4';
+import { t } from './i18n.js?v=5';
+import { isPrefEnabled } from './prefs.js?v=4';
 
 let selectedCategoryId = null;
 
@@ -19,21 +21,26 @@ export function renderSidebar(categories, tasks, activeView) {
     return counts;
   }, {});
   sidebar.innerHTML = `
-    <a href="#" class="brand" data-view="dashboard"><img src="assets/logo.svg" alt="Todo Meva" class="brand-logo" width="38" height="38"/><span>Todo Meva</span></a>
-    <div class="sidebar-section">
-      <p class="sidebar-title">Views</p>
-      ${[
-        ['dashboard', 'layout-dashboard', 'Dashboard'],
-        ['upcoming', 'calendar-days', 'Upcoming'],
-        ['priority', 'flag', 'Priority Matrix']
-      ].map(([view, iconName, label]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span></button>`).join('')}
+    <div class="sidebar-main">
+      <a href="#" class="brand" data-view="dashboard"><img src="assets/logo.svg" alt="${t('app_name')}" class="brand-logo" width="38" height="38"/><span>${t('app_name')}</span></a>
+      <div class="sidebar-section">
+        <p class="sidebar-title">${t('views')}</p>
+        ${[
+          ['dashboard', 'layout-dashboard', t('dashboard')],
+          ['upcoming', 'calendar-days', t('upcoming')],
+          ['priority', 'flag', t('priority_matrix')]
+        ].map(([view, iconName, label]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span></button>`).join('')}
+      </div>
+      <div class="sidebar-section">
+        <p class="sidebar-title">${t('categories')}</p>
+        ${categories.map((category) => `
+          <button class="category-item ${activeView === `category:${category.id}` ? 'active' : ''}" data-category-id="${category.id}">
+            <span class="category-dot" style="background:${category.color}"></span><span>${escapeHtml(category.name)}</span><span class="count-pill">${countByCategory[category.id] || 0}</span>
+          </button>`).join('')}
+      </div>
     </div>
-    <div class="sidebar-section">
-      <p class="sidebar-title">Categories</p>
-      ${categories.map((category) => `
-        <button class="category-item ${activeView === `category:${category.id}` ? 'active' : ''}" data-category-id="${category.id}">
-          <span class="category-dot" style="background:${category.color}"></span><span>${category.name}</span><span class="count-pill">${countByCategory[category.id] || 0}</span>
-        </button>`).join('')}
+    <div class="sidebar-section sidebar-settings">
+      <button class="settings-item ${activeView === 'settings' ? 'active' : ''}" data-view="settings">${icon('settings')}<span>${t('settings')}</span></button>
     </div>
   `;
   refreshIcons();
@@ -49,12 +56,12 @@ export function renderTaskCard(task, category) {
         <p class="task-title">${escapeHtml(task.title)}</p>
         ${task.description ? `<p class="muted">${escapeHtml(task.description)}</p>` : ''}
         <div class="task-meta">
-          <span>${category?.name || 'No category'}</span>
-          ${task.dueDate ? `<span>Due ${task.dueDate}</span>` : ''}
-          ${task.recurrence && task.recurrence !== 'none' ? `<span>Repeats ${task.recurrence}</span>` : ''}
+          <span>${category?.name || t('no_category')}</span>
+          ${task.dueDate ? `<span>${t('due_prefix')} ${task.dueDate}</span>` : ''}
+          ${task.recurrence && task.recurrence !== 'none' ? `<span>${t('repeats_prefix')} ${t(`repeat_${task.recurrence}`)}</span>` : ''}
         </div>
       </div>
-      <span class="badge ${priority.className}">${priority.label}</span>
+      <span class="badge ${priority.className}">${t(`priority_${task.priority}`)}</span>
     </article>
   `;
 }
@@ -82,7 +89,7 @@ export async function toggleTaskStatus(id) {
 }
 
 export async function deleteTaskById(id) {
-  if (!confirm('Delete this task?')) return;
+  if (!confirm(t('delete_confirm'))) return;
   await deleteTask(id);
   closeTaskModal();
   window.refreshCurrentView();
@@ -99,15 +106,15 @@ async function renderQuickAddForm() {
   const categories = await getCategories();
   if (!selectedCategoryId) {
     body.innerHTML = `
-      <div class="modal-header"><div><p class="eyebrow">Quick add</p><h3>Choose a category</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
-      <div class="category-grid">${categories.map((category) => `<button class="category-card" data-pick-category="${category.id}"><span class="category-dot" style="background:${category.color}"></span><h3>${category.name}</h3><p class="muted">Use smart presets for this area.</p></button>`).join('')}</div>
+      <div class="modal-header"><div><p class="eyebrow">${t('quick_add_eyebrow')}</p><h3>${t('choose_category')}</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
+      <div class="category-grid">${categories.map((category) => `<button class="category-card" data-pick-category="${category.id}"><span class="category-dot" style="background:${category.color}"></span><h3>${escapeHtml(category.name)}</h3><p class="muted">${t('use_presets')}</p></button>`).join('')}</div>
     `;
   } else {
     const category = categories.find((item) => item.id === selectedCategoryId);
     const templates = await getTemplatesByCategory(selectedCategoryId);
     body.innerHTML = `
-      <div class="modal-header"><div><p class="eyebrow">${category.name}</p><h3>Create task</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
-      <div class="template-row">${templates.map((template) => `<button class="template-chip" data-template='${JSON.stringify(template)}'>${template.title}</button>`).join('')}</div>
+      <div class="modal-header"><div><p class="eyebrow">${escapeHtml(category?.name || '')}</p><h3>${t('create_task')}</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
+      <div class="template-row">${templates.map((template) => `<button class="template-chip" data-template='${JSON.stringify(template)}'>${escapeHtml(template.title)}</button>`).join('')}</div>
       ${taskForm({ categoryId: selectedCategoryId, priority: 'medium', recurrence: 'none' }, categories, 'create-task-form')}
     `;
   }
@@ -148,9 +155,9 @@ export async function openTaskDetail(id) {
   const categories = await getCategories();
   document.querySelector('#task-modal').classList.remove('hidden');
   document.querySelector('#task-modal-body').innerHTML = `
-    <div class="modal-header"><div><p class="eyebrow">Edit task</p><h3>${escapeHtml(task.title)}</h3></div><button class="icon-btn" data-close-task>${icon('x')}</button></div>
+    <div class="modal-header"><div><p class="eyebrow">${t('edit_task')}</p><h3>${escapeHtml(task.title)}</h3></div><button class="icon-btn" data-close-task>${icon('x')}</button></div>
     ${taskForm(task, categories, 'edit-task-form')}
-    <div class="hero-actions"><button class="btn btn-danger" data-delete-task="${task.id}">Delete task</button></div>
+    <div class="hero-actions"><button class="btn btn-danger" data-delete-task="${task.id}">${t('delete_task')}</button></div>
   `;
   document.querySelector('#edit-task-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -167,18 +174,18 @@ function taskForm(task, categories, id) {
   return `
     <form id="${id}" class="form-grid">
       <input type="hidden" name="templateId" value="${task.templateId || ''}" />
-      <input class="field" name="title" placeholder="Task title" value="${escapeAttr(task.title || '')}" required />
-      <textarea class="textarea" name="description" placeholder="Description">${escapeHtml(task.description || '')}</textarea>
+      <input class="field" name="title" placeholder="${t('task_title_placeholder')}" value="${escapeAttr(task.title || '')}" required />
+      <textarea class="textarea" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
       <div class="two-col form-grid">
-        <select class="select" name="categoryId" required>${categories.map((category) => `<option value="${category.id}" ${Number(task.categoryId) === category.id ? 'selected' : ''}>${category.name}</option>`).join('')}</select>
-        <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>High</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>Medium</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>Low</option></select>
+        <select class="select" name="categoryId" required>${categories.map((category) => `<option value="${category.id}" ${Number(task.categoryId) === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select>
+        <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>${t('priority_high')}</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>${t('priority_medium')}</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>${t('priority_low')}</option></select>
       </div>
       <div class="two-col form-grid">
         <input class="field" type="date" name="dueDate" value="${task.dueDate || ''}" />
-        <select class="select" name="recurrence"><option value="none" ${task.recurrence === 'none' ? 'selected' : ''}>No repeat</option><option value="daily" ${task.recurrence === 'daily' ? 'selected' : ''}>Daily</option><option value="weekly" ${task.recurrence === 'weekly' ? 'selected' : ''}>Weekly</option><option value="monthly" ${task.recurrence === 'monthly' ? 'selected' : ''}>Monthly</option><option value="yearly" ${task.recurrence === 'yearly' ? 'selected' : ''}>Yearly</option></select>
+        <select class="select" name="recurrence"><option value="none" ${task.recurrence === 'none' ? 'selected' : ''}>${t('no_repeat')}</option><option value="daily" ${task.recurrence === 'daily' ? 'selected' : ''}>${t('daily')}</option><option value="weekly" ${task.recurrence === 'weekly' ? 'selected' : ''}>${t('weekly')}</option><option value="monthly" ${task.recurrence === 'monthly' ? 'selected' : ''}>${t('monthly')}</option><option value="yearly" ${task.recurrence === 'yearly' ? 'selected' : ''}>${t('yearly')}</option></select>
       </div>
-      <select class="select" name="reminder"><option value="">No reminder</option><option value="15">15 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select>
-      <button class="btn btn-primary" type="submit">Save task</button>
+      <select class="select" name="reminder"><option value="">${t('no_reminder')}</option><option value="15">${t('reminder_15')}</option><option value="60">${t('reminder_60')}</option><option value="1440">${t('reminder_1440')}</option></select>
+      <button class="btn btn-primary" type="submit">${t('save_task')}</button>
     </form>
   `;
 }
@@ -206,10 +213,10 @@ function closeTaskModal() {
 }
 
 export function showOnboarding() {
-  if (localStorage.getItem('todoMeva_onboarded')) return;
+  if (!isPrefEnabled('onboarding') || localStorage.getItem('todoMeva_onboarded')) return;
   const overlay = document.querySelector('#onboarding-overlay');
   overlay.classList.remove('hidden');
-  document.querySelector('#onboarding-card').innerHTML = `<p class="eyebrow">Welcome</p><h3>Plan your day with calm clarity.</h3><p class="muted">Use categories, templates, due dates, recurrence, reminders, and export/import to keep your tasks organized.</p><button class="btn btn-primary" data-finish-onboarding>Start</button>`;
+  document.querySelector('#onboarding-card').innerHTML = `<p class="eyebrow">${t('ob_welcome')}</p><h3>${t('ob_title')}</h3><p class="muted">${t('ob_body')}</p><button class="btn btn-primary" data-finish-onboarding>${t('ob_start')}</button>`;
   document.querySelector('[data-finish-onboarding]').addEventListener('click', () => {
     localStorage.setItem('todoMeva_onboarded', '1');
     overlay.classList.add('hidden');

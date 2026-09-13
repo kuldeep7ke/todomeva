@@ -9,12 +9,16 @@
       (function () {
         const theme = localStorage.getItem('todoMeva_theme') || 'light';
         document.documentElement.dataset.theme = theme;
+        const brand = localStorage.getItem('todoMeva_brand');
+        if (brand) document.documentElement.dataset.brand = brand;
+        const lang = localStorage.getItem('todoMeva_lang');
+        if (lang) document.documentElement.lang = lang;
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=11" />
   </head>
   <body>
     <main id="landing-page" class="landing-page">
@@ -88,16 +92,14 @@
       <section class="main-panel">
         <header class="topbar">
           <div class="topbar-left">
-            <button id="mobile-menu-btn" class="icon-btn mobile-only" aria-label="Open menu"><i data-lucide="menu"></i></button>
-            <div>
-              <p class="eyebrow">Todo Meva</p>
-              <h2 id="view-title">Dashboard</h2>
-            </div>
+            <button id="mobile-menu-btn" class="icon-btn" aria-label="Open menu"><i data-lucide="menu"></i></button>
+            <h2 id="view-title">Todo Meva</h2>
           </div>
           <div class="topbar-actions">
-            <button class="btn btn-ghost" data-request-notifications>Reminders</button>
-            <button id="import-btn" class="btn btn-ghost">Import</button>
-            <button id="export-btn" class="btn btn-ghost">Export</button>
+            <div class="notif-wrap">
+              <button id="notif-btn" class="icon-btn" aria-label="Notifications"><i data-lucide="bell"></i><span id="notif-badge" class="notif-badge hidden" aria-hidden="true"></span></button>
+              <div id="notif-panel" class="notif-panel hidden"></div>
+            </div>
             <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme"><i data-lucide="sun"></i></button>
           </div>
         </header>
@@ -126,6 +128,7 @@
 
     <script src="vendor/dexie.min.js"></script>
     <script src="vendor/lucide.min.js"></script>
-    <script type="module" src="js/app.js?v=1"></script>
+    <script src="vendor/supabase.min.js"></script>
+    <script type="module" src="js/app.js?v=5"></script>
   </body>
 </html>

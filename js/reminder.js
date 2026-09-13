@@ -1,6 +1,8 @@
-import { getTasks, updateTask } from './db.js?v=1';
+﻿import { getTasks, updateTask } from './db.js?v=4';
+import { isPrefEnabled } from './prefs.js?v=4';
 
 export async function checkAndFireReminders() {
+  if (!isPrefEnabled('reminders')) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const now = Date.now();
   const tasks = await getTasks();
@@ -21,7 +23,9 @@ export async function checkAndFireReminders() {
 }
 
 export async function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission();
+  if (!('Notification' in window)) return 'unsupported';
+  if (Notification.permission === 'default') {
+    return Notification.requestPermission();
   }
+  return Notification.permission;
 }

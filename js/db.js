@@ -120,6 +120,9 @@ export async function addTask(task) {
     createdAt: now,
     updatedAt: now,
     completedAt: '',
+    deletedAt: '',
+    focusMinutes: Number(task.focusMinutes) || 0,
+    focusStartedAt: '',
     parentTaskId: task.parentTaskId || null
   });
   await addActivity('task_created', id, task.title);
@@ -132,10 +135,56 @@ export async function updateTask(id, updates) {
   await addActivity('task_updated', Number(id), updates.title || existing?.title || 'Task');
 }
 
-export async function deleteTask(id) {
+export async function archiveTask(id) {
+  const task = await getTask(id);
+  await db.tasks.update(Number(id), {
+    deletedAt: localDateTimeStr(),
+    focusStartedAt: '',
+    updatedAt: localDateTimeStr()
+  });
+  await addActivity('task_archived', Number(id), task?.title || 'Task');
+}
+
+export async function restoreTask(id) {
+  const task = await getTask(id);
+  await db.tasks.update(Number(id), {
+    deletedAt: '',
+    updatedAt: localDateTimeStr()
+  });
+  await addActivity('task_restored', Number(id), task?.title || 'Task');
+}
+
+export async function permanentDeleteTask(id) {
   const task = await getTask(id);
   await db.tasks.delete(Number(id));
   await addActivity('task_deleted', Number(id), task?.title || 'Task');
+}
+
+export async function sendToPending(id) {
+  const task = await getTask(id);
+  await db.tasks.update(Number(id), {
+    priority: 'pending',
+    focusStartedAt: '',
+    updatedAt: localDateTimeStr()
+  });
+  await addActivity('task_pending', Number(id), task?.title || 'Task');
+}
+
+export async function startFocus(id) {
+  const task = await getTask(id);
+  const minutes = Math.max(1, Number(task?.focusMinutes) || 25);
+  await db.tasks.update(Number(id), {
+    focusMinutes: minutes,
+    focusStartedAt: localDateTimeStr(),
+    updatedAt: localDateTimeStr()
+  });
+}
+
+export async function stopFocus(id) {
+  await db.tasks.update(Number(id), {
+    focusStartedAt: '',
+    updatedAt: localDateTimeStr()
+  });
 }
 
 export async function setTaskStatus(id, status) {

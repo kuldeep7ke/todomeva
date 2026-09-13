@@ -1,4 +1,4 @@
-﻿import { getTasks, updateTask } from './db.js?v=5';
+﻿import { getTasks, updateTask } from './db.js?v=6';
 import { isPrefEnabled } from './prefs.js?v=4';
 
 export async function checkAndFireReminders() {
@@ -7,7 +7,7 @@ export async function checkAndFireReminders() {
   const now = Date.now();
   const tasks = await getTasks();
   for (const task of tasks) {
-    if (task.status === 'completed' || task.priority === 'pending' || !task.dueDate || !task.reminders?.length) continue;
+    if (task.status === 'completed' || task.priority === 'pending' || task.deletedAt || !task.dueDate || !task.reminders?.length) continue;
     const due = new Date(`${task.dueDate}T09:00:00`).getTime();
     const reminders = task.reminders.map((reminder) => {
       if (reminder.fired) return reminder;

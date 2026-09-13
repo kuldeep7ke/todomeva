@@ -1,18 +1,18 @@
-﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=5';
-import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=5';
-import { t } from './i18n.js?v=6';
-import { getLang, getLangs } from './i18n.js?v=6';
+﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=6';
+import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=6';
+import { t } from './i18n.js?v=7';
+import { getLang, getLangs } from './i18n.js?v=7';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
-import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=5';
+import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=6';
 
 export async function renderDashboard() {
   const { categories, tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending');
+  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt);
   const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today);
   const dueToday = openTasks.filter((task) => task.dueDate === today);
-  const completed = tasks.filter((task) => task.status === 'completed');
+  const completed = tasks.filter((task) => task.status === 'completed' && !task.deletedAt);
   const content = document.querySelector('#view-content');
   content.innerHTML = `
     <section class="grid stats-grid">
@@ -36,7 +36,7 @@ export async function renderDashboard() {
 export async function renderUpcoming() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const upcoming = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const upcoming = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const content = document.querySelector('#view-content');
   content.innerHTML = taskSection(t('section_next'), upcoming, categoryMap);
   attachTaskCardEvents(content);
@@ -46,7 +46,7 @@ export async function renderUpcoming() {
 export async function renderCategory(categoryId) {
   const { categories, tasks, categoryMap } = await loadViewData();
   const category = categories.find((item) => item.id === Number(categoryId));
-  const filtered = tasks.filter((task) => task.categoryId === Number(categoryId));
+  const filtered = tasks.filter((task) => task.categoryId === Number(categoryId) && !task.deletedAt);
   document.querySelector('#view-content').innerHTML = taskSection(category?.name || t('no_category'), filtered, categoryMap);
   attachTaskCardEvents(document.querySelector('#view-content'));
   refreshIcons();
@@ -55,9 +55,79 @@ export async function renderCategory(categoryId) {
 export async function renderPriorityMatrix() {
   const { tasks, categoryMap } = await loadViewData();
   const content = document.querySelector('#view-content');
-  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low', 'pending'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && task.status !== 'completed').map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}</div>`;
+  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low', 'pending'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && task.status !== 'completed' && !task.deletedAt).map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}</div>`;
   attachTaskCardEvents(content);
   refreshIcons();
+}
+
+export async function renderDone() {
+  const { tasks, categoryMap } = await loadViewData();
+  const done = tasks.filter((task) => task.status === 'completed' && !task.deletedAt);
+  const groups = doneGroups(done);
+  const content = document.querySelector('#view-content');
+  if (!groups.length) {
+    content.innerHTML = `<p class="empty-state">${t('done_empty')}</p>`;
+  } else {
+    content.innerHTML = groups.map((group) => taskSection(t(group.key), group.items, categoryMap)).join('');
+  }
+  attachTaskCardEvents(content);
+  refreshIcons();
+}
+
+export async function renderArchive() {
+  const { tasks, categoryMap } = await loadViewData();
+  const archived = tasks.filter((task) => task.deletedAt).sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+  const content = document.querySelector('#view-content');
+  content.innerHTML = archived.length ? `
+    <div class="card">
+      <div class="section-header"><h3>${t('archive')}</h3><span class="muted">${archived.length}</span></div>
+      <div class="archive-list">
+        ${archived.map((task) => archiveRow(task, categoryMap.get(task.categoryId))).join('')}
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-danger" data-archive-empty>${t('empty_archive')}</button>
+      </div>
+    </div>` : `<p class="empty-state">${t('archive_empty')}</p>`;
+  refreshIcons();
+}
+
+function doneGroups(tasks) {
+  const today = localDateStr();
+  const weekStart = startOfWeekDateStr();
+  const sorted = [...tasks].sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  const buckets = [
+    { key: 'done_today', items: [] },
+    { key: 'done_week', items: [] },
+    { key: 'done_earlier', items: [] }
+  ];
+  for (const task of sorted) {
+    const date = (task.completedAt || '').slice(0, 10);
+    if (!date || date < weekStart) buckets[2].items.push(task);
+    else if (date === today) buckets[0].items.push(task);
+    else buckets[1].items.push(task);
+  }
+  return buckets.filter((bucket) => bucket.items.length > 0);
+}
+
+function startOfWeekDateStr() {
+  const date = new Date();
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function archiveRow(task, category) {
+  return `<div class="archive-row" data-task-id="${task.id}">
+    <div class="archive-copy">
+      <strong>${escapeHtml(task.title)}</strong>
+      <span class="muted">${escapeHtml(category?.name || t('no_category'))} · ${t('archived_at')} ${escapeHtml(task.deletedAt)}</span>
+    </div>
+    <div class="hero-actions">
+      <button class="btn btn-ghost" data-archive-restore="${task.id}">${t('archive_restore')}</button>
+      <button class="btn btn-danger" data-archive-purge="${task.id}">${t('delete_forever')}</button>
+    </div>
+  </div>`;
 }
 
 export async function renderSettings() {
@@ -245,7 +315,7 @@ export async function updateNotifBadge() {
   if (!badge) return;
   const tasks = await getTasks();
   const today = localDateStr();
-  const count = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && task.dueDate && task.dueDate <= today).length;
+  const count = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt && task.dueDate && task.dueDate <= today).length;
   badge.textContent = count > 9 ? '9+' : String(count);
   badge.classList.toggle('hidden', count === 0);
 }
@@ -256,7 +326,7 @@ export async function renderNotificationsPanel() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
   const soonLimit = addDaysDateStr(3);
-  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending');
+  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt);
   const groups = [
     { key: 'section_overdue', items: openTasks.filter((task) => task.dueDate && task.dueDate < today) },
     { key: 'section_today', items: openTasks.filter((task) => task.dueDate === today) },

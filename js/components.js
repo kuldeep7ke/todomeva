@@ -1,8 +1,9 @@
-﻿import { addTask, deleteTask, getCategories, getTask, getTemplatesByCategory, updateTask, setTaskStatus } from './db.js?v=5';
+﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateTask } from './db.js?v=6';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
-import { createRecurringTaskInstance } from './recurrence.js?v=5';
-import { t } from './i18n.js?v=6';
+import { createRecurringTaskInstance } from './recurrence.js?v=6';
+import { t } from './i18n.js?v=7';
 import { isPrefEnabled } from './prefs.js?v=4';
+import { pushDeletion } from './sync.js?v=6';
 
 let selectedCategoryId = null;
 
@@ -17,19 +18,22 @@ export function refreshIcons() {
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
   const countByCategory = tasks.reduce((counts, task) => {
-    if (task.status !== 'completed' && task.priority !== 'pending') counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
+    if (task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt) counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
     return counts;
   }, {});
+  const archivedCount = tasks.filter((task) => task.deletedAt).length;
   sidebar.innerHTML = `
     <div class="sidebar-main">
       <a href="#" class="brand" data-view="dashboard"><img src="assets/logo.svg" alt="${t('app_name')}" class="brand-logo" width="38" height="38"/><span>${t('app_name')}</span></a>
       <div class="sidebar-section">
         <p class="sidebar-title">${t('views')}</p>
         ${[
-          ['dashboard', 'layout-dashboard', t('dashboard')],
-          ['upcoming', 'calendar-days', t('upcoming')],
-          ['priority', 'flag', t('priority_matrix')]
-        ].map(([view, iconName, label]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span></button>`).join('')}
+          ['dashboard', 'layout-dashboard', t('dashboard'), ''],
+          ['upcoming', 'calendar-days', t('upcoming'), ''],
+          ['priority', 'flag', t('priority_matrix'), ''],
+          ['done', 'check-check', t('done'), ''],
+          ['archive', 'archive', t('archive'), archivedCount ? String(archivedCount) : '']
+        ].map(([view, iconName, label, count]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span>${count ? `<span class="count-pill">${count}</span>` : ''}</button>`).join('')}
       </div>
       <div class="sidebar-section">
         <p class="sidebar-title">${t('categories')}</p>
@@ -46,9 +50,28 @@ export function renderSidebar(categories, tasks, activeView) {
   refreshIcons();
 }
 
+function focusLabel(task) {
+  const minutes = Number(task.focusMinutes) || 25;
+  if (task.focusStartedAt) {
+    const start = new Date(task.focusStartedAt).getTime();
+    const end = start + minutes * 60000;
+    return formatRemaining(end - Date.now());
+  }
+  return `${minutes}m`;
+}
+
+function formatRemaining(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mm = String(Math.floor(total / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
 export function renderTaskCard(task, category) {
   const priority = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
+  const isOpen = task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt;
+  const running = isOpen && Boolean(task.focusStartedAt) && Number(task.focusMinutes) > 0;
   return `
     <article class="task-card ${task.status === 'completed' ? 'completed' : ''}" data-task-id="${task.id}">
       <button class="status-btn ${task.status}" data-status-toggle="${task.id}" title="${status.label}"></button>
@@ -60,6 +83,10 @@ export function renderTaskCard(task, category) {
           ${task.dueDate ? `<span>${t('due_prefix')} ${task.dueDate}</span>` : ''}
           ${task.recurrence && task.recurrence !== 'none' ? `<span>${t('repeats_prefix')} ${t(`repeat_${task.recurrence}`)}</span>` : ''}
         </div>
+        ${isOpen ? `<div class="task-actions">
+          <button class="chip-btn" data-skip-task="${task.id}" title="${t('skip_to_pending')}">${icon('skip-forward')}<span>${t('skip_to_pending')}</span></button>
+          ${Number(task.focusMinutes) > 0 ? `<button class="chip-btn ${running ? 'active' : ''}" data-focus-toggle="${task.id}" title="${running ? t('focus_pause') : t('focus_start')}">${icon(running ? 'pause' : 'play')}<span data-focus-chip="${task.id}">${focusLabel(task)}</span></button>` : ''}
+        </div>` : ''}
       </div>
       <span class="badge ${priority.className}">${t(`priority_${task.priority}`)}</span>
     </article>
@@ -70,12 +97,29 @@ export function attachTaskCardEvents(container = document) {
   container.querySelectorAll('[data-task-id]').forEach((card) => {
     card.addEventListener('click', (event) => {
       if (event.target.closest('[data-status-toggle]')) return;
+      if (event.target.closest('[data-skip-task]')) return;
+      if (event.target.closest('[data-focus-toggle]')) return;
       openTaskDetail(card.dataset.taskId);
     });
   });
   container.querySelectorAll('[data-status-toggle]').forEach((button) => {
     button.addEventListener('click', async () => {
       await toggleTaskStatus(button.dataset.statusToggle);
+      window.refreshCurrentView();
+    });
+  });
+  container.querySelectorAll('[data-skip-task]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await sendToPending(Number(button.dataset.skipTask));
+      window.refreshCurrentView();
+    });
+  });
+  container.querySelectorAll('[data-focus-toggle]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = Number(button.dataset.focusToggle);
+      const task = await getTask(id);
+      if (task.focusStartedAt) await stopFocus(id);
+      else await startFocus(id);
       window.refreshCurrentView();
     });
   });
@@ -88,10 +132,34 @@ export async function toggleTaskStatus(id) {
   if (next === 'completed') await createRecurringTaskInstance(task);
 }
 
-export async function deleteTaskById(id) {
-  if (!confirm(t('delete_confirm'))) return;
-  await deleteTask(id);
+export async function archiveTaskById(id) {
+  await archiveTask(id);
   closeTaskModal();
+  window.refreshCurrentView();
+}
+
+export async function restoreTaskById(id) {
+  await restoreTask(id);
+  window.refreshCurrentView();
+}
+
+export async function purgeTaskById(id) {
+  if (!confirm(t('delete_confirm'))) return;
+  const task = await getTask(id);
+  await permanentDeleteTask(id);
+  await pushDeletion('task', task?.uuid);
+  window.refreshCurrentView();
+}
+
+export async function emptyArchiveAll() {
+  const tasks = await getTasks();
+  const archived = tasks.filter((task) => task.deletedAt);
+  if (!archived.length) return;
+  if (!confirm(t('empty_archive_confirm'))) return;
+  for (const task of archived) {
+    await permanentDeleteTask(task.id);
+    await pushDeletion('task', task.uuid);
+  }
   window.refreshCurrentView();
 }
 
@@ -166,7 +234,7 @@ export async function openTaskDetail(id) {
     window.refreshCurrentView();
   });
   document.querySelector('[data-close-task]').addEventListener('click', closeTaskModal);
-  document.querySelector('[data-delete-task]').addEventListener('click', () => deleteTaskById(task.id));
+  document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
   refreshIcons();
 }
 
@@ -185,6 +253,7 @@ function taskForm(task, categories, id) {
         <select class="select" name="recurrence"><option value="none" ${task.recurrence === 'none' ? 'selected' : ''}>${t('no_repeat')}</option><option value="daily" ${task.recurrence === 'daily' ? 'selected' : ''}>${t('daily')}</option><option value="weekly" ${task.recurrence === 'weekly' ? 'selected' : ''}>${t('weekly')}</option><option value="monthly" ${task.recurrence === 'monthly' ? 'selected' : ''}>${t('monthly')}</option><option value="yearly" ${task.recurrence === 'yearly' ? 'selected' : ''}>${t('yearly')}</option></select>
       </div>
       <select class="select" name="reminder"><option value="">${t('no_reminder')}</option><option value="15">${t('reminder_15')}</option><option value="60">${t('reminder_60')}</option><option value="1440">${t('reminder_1440')}</option></select>
+      <input class="field" type="number" name="focusMinutes" min="0" step="1" placeholder="${t('focus_min_ph')}" value="${task.focusMinutes ? Number(task.focusMinutes) : ''}" />
       <button class="btn btn-primary" type="submit">${t('save_task')}</button>
     </form>
   `;
@@ -200,7 +269,8 @@ function formToTask(form) {
     priority: form.get('priority'),
     dueDate: form.get('dueDate'),
     recurrence: form.get('recurrence'),
-    reminders: reminder ? [{ minutesBefore: Number(reminder), fired: false }] : []
+    reminders: reminder ? [{ minutesBefore: Number(reminder), fired: false }] : [],
+    focusMinutes: Number(form.get('focusMinutes')) || 0
   };
 }
 

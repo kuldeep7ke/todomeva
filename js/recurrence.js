@@ -1,4 +1,4 @@
-﻿import { addTask, addActivity, localDateStr } from './db.js?v=5';
+﻿import { addTask, addActivity, localDateStr } from './db.js?v=6';
 
 export function calculateNextOccurrence(dueDate, recurrence) {
   if (!dueDate || !recurrence || recurrence === 'none') return '';
@@ -18,6 +18,7 @@ export async function createRecurringTaskInstance(task) {
     dueDate: nextDue,
     status: 'todo',
     parentTaskId: task.parentTaskId || task.id,
+    focusStartedAt: '',
     reminders: (task.reminders || []).map((reminder) => ({ ...reminder, fired: false }))
   });
   await addActivity('task_recurred', id, task.title, `Next due ${nextDue}`);

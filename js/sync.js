@@ -1,4 +1,4 @@
-﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=5';
+﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=6';
 
 const CONFIG_KEY = 'todoMeva_sync';
 const RECONNECT_INTERVAL = 30000;
@@ -92,11 +92,32 @@ function toLocalTimestamp(record) {
 }
 
 function normalizeTimestamps(entity, data) {
-  const fields = entity === 'activity' ? ['timestamp'] : ['updatedAt', 'createdAt', 'completedAt'];
+  const fields = entity === 'activity' ? ['timestamp'] : ['updatedAt', 'createdAt', 'completedAt', 'deletedAt', 'focusStartedAt'];
   for (const field of fields) {
     const value = data[field];
     if (value && /\dT\d{2}:\d{2}/.test(value)) data[field] = localDateTimeStr(value);
   }
+}
+
+export async function pushDeletion(entity, uuid) {
+  if (!state.client || !entity || !uuid) return;
+  const now = new Date().toISOString();
+  try {
+    const { error } = await state.client.from('sync_docs').upsert({
+      id: `${entity}:${uuid}`,
+      entity,
+      data: { uuid, deleted: true, updatedAt: now },
+      updated_at: now
+    }, { onConflict: 'id' });
+    if (error) throw error;
+    state.lastSync = new Date().toISOString();
+    state.status = 'connected';
+    state.error = null;
+  } catch (error) {
+    state.status = 'error';
+    state.error = error.message || String(error);
+  }
+  emit();
 }
 
 function docRows(entity, records) {

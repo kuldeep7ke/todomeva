@@ -1,11 +1,11 @@
-﻿import { exportData, getCategories, getTasks, importData, seedDatabase } from './db.js?v=5';
-import { closeQuickAdd, openQuickAdd, openTaskDetail, refreshIcons, renderSidebar, showOnboarding } from './components.js?v=5';
-import { renderCategory, renderDashboard, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=6';
-import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=6';
+﻿import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=6';
+import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=6';
+import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=7';
+import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
 import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=6';
-import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=5';
+import { initLang, setLang, t } from './i18n.js?v=7';
+import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=6';
 
 let activeView = 'dashboard';
 let initPromise = null;
@@ -37,12 +37,13 @@ async function initApp() {
     showOnboarding();
     autoConnect();
     setInterval(checkAndFireReminders, 30000);
+    setInterval(tickFocusTimers, 1000);
   })();
   return initPromise;
 }
 
 async function autoConnect() {
-  const { autoConnect: connect } = await import('./sync.js?v=5');
+  const { autoConnect: connect } = await import('./sync.js?v=6');
   await connect();
 }
 
@@ -121,6 +122,8 @@ async function refreshCurrentView() {
   if (activeView === 'dashboard') await renderDashboard();
   if (activeView === 'upcoming') await renderUpcoming();
   if (activeView === 'priority') await renderPriorityMatrix();
+  if (activeView === 'done') await renderDone();
+  if (activeView === 'archive') await renderArchive();
   if (activeView === 'settings') {
     await renderSettings();
     wireSettingsEvents();
@@ -187,6 +190,21 @@ function handleViewContentClick(event) {
   const action = event.target.closest('[data-settings-action]');
   if (action) {
     runSettingsAction(action);
+    return;
+  }
+  const archiveRestore = event.target.closest('[data-archive-restore]');
+  if (archiveRestore) {
+    restoreTaskById(Number(archiveRestore.dataset.archiveRestore));
+    return;
+  }
+  const archivePurge = event.target.closest('[data-archive-purge]');
+  if (archivePurge) {
+    purgeTaskById(Number(archivePurge.dataset.archivePurge));
+    return;
+  }
+  const archiveEmpty = event.target.closest('[data-archive-empty]');
+  if (archiveEmpty) {
+    emptyArchiveAll();
     return;
   }
   const fallback = event.target.closest('[data-view-setting]');
@@ -376,6 +394,38 @@ function handleSyncEvent(event) {
   if (now - lastSyncRefresh < 1500) return;
   lastSyncRefresh = now;
   refreshCurrentView();
+}
+
+function tickFocusTimers() {
+  const now = Date.now();
+  getTasks().then((tasks) => {
+    let changed = false;
+    for (const task of tasks) {
+      if (!task.focusStartedAt || task.status === 'completed' || task.priority === 'pending' || task.deletedAt) continue;
+      const end = new Date(task.focusStartedAt).getTime() + (Number(task.focusMinutes) || 25) * 60000;
+      if (now >= end) {
+        sendToPending(task.id);
+        changed = true;
+      }
+    }
+    if (changed) {
+      window.refreshCurrentView();
+      return;
+    }
+    document.querySelectorAll('[data-focus-chip]').forEach((span) => {
+      const task = tasks.find((item) => String(item.id) === span.dataset.focusChip);
+      if (!task?.focusStartedAt) return;
+      const end = new Date(task.focusStartedAt).getTime() + (Number(task.focusMinutes) || 25) * 60000;
+      span.textContent = formatFocusRemaining(end - now);
+    });
+  });
+}
+
+function formatFocusRemaining(ms) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mm = String(Math.floor(total / 60)).padStart(2, '0');
+  const ss = String(total % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
 }
 
 async function downloadExport() {

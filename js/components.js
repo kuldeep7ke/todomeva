@@ -1,7 +1,7 @@
-﻿import { addTask, deleteTask, getCategories, getTask, getTemplatesByCategory, updateTask, setTaskStatus } from './db.js?v=4';
-import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=4';
-import { createRecurringTaskInstance } from './recurrence.js?v=4';
-import { t } from './i18n.js?v=5';
+﻿import { addTask, deleteTask, getCategories, getTask, getTemplatesByCategory, updateTask, setTaskStatus } from './db.js?v=5';
+import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
+import { createRecurringTaskInstance } from './recurrence.js?v=5';
+import { t } from './i18n.js?v=6';
 import { isPrefEnabled } from './prefs.js?v=4';
 
 let selectedCategoryId = null;
@@ -17,7 +17,7 @@ export function refreshIcons() {
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
   const countByCategory = tasks.reduce((counts, task) => {
-    if (task.status !== 'completed') counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
+    if (task.status !== 'completed' && task.priority !== 'pending') counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
     return counts;
   }, {});
   sidebar.innerHTML = `
@@ -178,7 +178,7 @@ function taskForm(task, categories, id) {
       <textarea class="textarea" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
       <div class="two-col form-grid">
         <select class="select" name="categoryId" required>${categories.map((category) => `<option value="${category.id}" ${Number(task.categoryId) === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select>
-        <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>${t('priority_high')}</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>${t('priority_medium')}</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>${t('priority_low')}</option></select>
+        <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>${t('priority_high')}</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>${t('priority_medium')}</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>${t('priority_low')}</option><option value="pending" ${task.priority === 'pending' ? 'selected' : ''}>${t('priority_pending')}</option></select>
       </div>
       <div class="two-col form-grid">
         <input class="field" type="date" name="dueDate" value="${task.dueDate || ''}" />

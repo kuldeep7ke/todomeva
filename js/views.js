@@ -1,15 +1,15 @@
-﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=4';
-import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=4';
-import { t } from './i18n.js?v=5';
-import { getLang, getLangs } from './i18n.js?v=5';
+﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=5';
+import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=5';
+import { t } from './i18n.js?v=6';
+import { getLang, getLangs } from './i18n.js?v=6';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
-import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=4';
+import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=5';
 
 export async function renderDashboard() {
   const { categories, tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const openTasks = tasks.filter((task) => task.status !== 'completed');
+  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending');
   const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today);
   const dueToday = openTasks.filter((task) => task.dueDate === today);
   const completed = tasks.filter((task) => task.status === 'completed');
@@ -18,7 +18,7 @@ export async function renderDashboard() {
     <section class="grid stats-grid">
       ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required /><select class="select" name="categoryId">${categories.map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`).join('')}</select><select class="select" name="priority"><option value="medium">${t('priority_medium')}</option><option value="high">${t('priority_high')}</option><option value="low">${t('priority_low')}</option></select><button class="btn btn-primary">${t('add')}</button></form></section>
+    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required /><select class="select" name="categoryId">${categories.map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`).join('')}</select><select class="select" name="priority"><option value="medium">${t('priority_medium')}</option><option value="high">${t('priority_high')}</option><option value="low">${t('priority_low')}</option><option value="pending">${t('priority_pending')}</option></select><button class="btn btn-primary">${t('add')}</button></form></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}
@@ -36,7 +36,7 @@ export async function renderDashboard() {
 export async function renderUpcoming() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const upcoming = tasks.filter((task) => task.status !== 'completed' && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const upcoming = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const content = document.querySelector('#view-content');
   content.innerHTML = taskSection(t('section_next'), upcoming, categoryMap);
   attachTaskCardEvents(content);
@@ -55,7 +55,7 @@ export async function renderCategory(categoryId) {
 export async function renderPriorityMatrix() {
   const { tasks, categoryMap } = await loadViewData();
   const content = document.querySelector('#view-content');
-  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && task.status !== 'completed').map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}</div>`;
+  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low', 'pending'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && task.status !== 'completed').map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}</div>`;
   attachTaskCardEvents(content);
   refreshIcons();
 }
@@ -245,7 +245,7 @@ export async function updateNotifBadge() {
   if (!badge) return;
   const tasks = await getTasks();
   const today = localDateStr();
-  const count = tasks.filter((task) => task.status !== 'completed' && task.dueDate && task.dueDate <= today).length;
+  const count = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && task.dueDate && task.dueDate <= today).length;
   badge.textContent = count > 9 ? '9+' : String(count);
   badge.classList.toggle('hidden', count === 0);
 }
@@ -256,7 +256,7 @@ export async function renderNotificationsPanel() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
   const soonLimit = addDaysDateStr(3);
-  const openTasks = tasks.filter((task) => task.status !== 'completed');
+  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending');
   const groups = [
     { key: 'section_overdue', items: openTasks.filter((task) => task.dueDate && task.dueDate < today) },
     { key: 'section_today', items: openTasks.filter((task) => task.dueDate === today) },

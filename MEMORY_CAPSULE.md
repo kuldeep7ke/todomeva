@@ -110,9 +110,11 @@ Todo Meva/
 Files load with a `?v=N` query param because of browser caching. **Bump `?v=` of any file you edit** — in `index.html` for `style.css`/`app.js`, and in every importing module for `.js` dependencies.
 
 Current versions (2026-09-13):
-- `index.html`: `style.css?v=11`, `js/app.js?v=5`
-- `app.js` imports: `views.js?v=5`, `reminder.js?v=5`, `i18n.js?v=5`; everything else `?v=4`
-- `components.js` / `views.js` import `i18n.js?v=5`; remaining imports `?v=4`
+- `index.html`: `style.css?v=12`, `js/app.js?v=6`
+- `app.js` imports: `db.js?v=5`, `components.js?v=5`, `views.js?v=6`, `reminder.js?v=6`, `i18n.js?v=6`, `sync.js?v=5`; `prefs.js?v=4`, `account.js?v=4`
+- `components.js` imports `db.js?v=5`, `seed.js?v=5`, `recurrence.js?v=5`, `i18n.js?v=6`, `prefs.js?v=4`
+- `views.js` imports `db.js?v=5`, `components.js?v=5`, `i18n.js?v=6`, `sync.js?v=5`, `prefs.js?v=4`, `account.js?v=4`
+- `db.js` imports `seed.js?v=5`; `reminder.js`/`recurrence.js`/`sync.js` import `db.js?v=5`
 
 ---
 
@@ -235,7 +237,7 @@ Security note: anon has full access by design — acceptable only because each u
 1. **Dashboard** — Stats (overdue/open/completed), quick create form, overdue/today/open task sections
 2. **Upcoming** — Chronological list of future dated tasks (30 days)
 3. **Category** — Filter tasks by category (click from sidebar)
-4. **Priority Matrix** — Columns for high/medium/low priority
+4. **Priority Matrix** — Columns for high/medium/low/pending priority
 5. **Settings** — Single scrolling page, 8 section cards (Account, Appearance/App Color, Language, Notifications & Popups, Multi-Device Sync, Data, Danger Zone, About)
 
 ### Task Management

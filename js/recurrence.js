@@ -1,4 +1,4 @@
-﻿import { addTask, addActivity, localDateStr } from './db.js?v=4';
+﻿import { addTask, addActivity, localDateStr } from './db.js?v=5';
 
 export function calculateNextOccurrence(dueDate, recurrence) {
   if (!dueDate || !recurrence || recurrence === 'none') return '';

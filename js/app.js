@@ -1,11 +1,11 @@
-﻿import { exportData, getCategories, getTasks, importData, seedDatabase } from './db.js?v=4';
-import { closeQuickAdd, openQuickAdd, openTaskDetail, refreshIcons, renderSidebar, showOnboarding } from './components.js?v=4';
-import { renderCategory, renderDashboard, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=5';
-import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=5';
+﻿import { exportData, getCategories, getTasks, importData, seedDatabase } from './db.js?v=5';
+import { closeQuickAdd, openQuickAdd, openTaskDetail, refreshIcons, renderSidebar, showOnboarding } from './components.js?v=5';
+import { renderCategory, renderDashboard, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=6';
+import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=6';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
 import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=5';
-import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=4';
+import { initLang, setLang, t } from './i18n.js?v=6';
+import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=5';
 
 let activeView = 'dashboard';
 let initPromise = null;
@@ -42,7 +42,7 @@ async function initApp() {
 }
 
 async function autoConnect() {
-  const { autoConnect: connect } = await import('./sync.js?v=4');
+  const { autoConnect: connect } = await import('./sync.js?v=5');
   await connect();
 }
 

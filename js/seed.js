@@ -1,7 +1,8 @@
 export const PRIORITY_CONFIG = {
   high: { label: 'High', className: 'high' },
   medium: { label: 'Medium', className: 'medium' },
-  low: { label: 'Low', className: 'low' }
+  low: { label: 'Low', className: 'low' },
+  pending: { label: 'Pending', className: 'pending' }
 };
 
 export const STATUS_CONFIG = {

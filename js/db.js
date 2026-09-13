@@ -1,4 +1,4 @@
-﻿import { SEED_CATEGORIES, buildSeedTemplates } from './seed.js?v=4';
+﻿import { SEED_CATEGORIES, buildSeedTemplates } from './seed.js?v=5';
 
 const DexieCtor = window.Dexie;
 

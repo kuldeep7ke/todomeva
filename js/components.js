@@ -1,4 +1,4 @@
-﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateTask } from './db.js?v=6';
+﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
 import { t } from './i18n.js?v=7';
@@ -14,6 +14,86 @@ export function icon(name) {
 export function refreshIcons() {
   if (window.lucide) window.lucide.createIcons();
 }
+
+export const CATEGORY_COLORS = ['#3B82F6', '#22C55E', '#8B5CF6', '#6366F1', '#14B8A6', '#F59E0B', '#EC4899', '#06B6D4', '#EF4444', '#F97316', '#A855F7', '#64748B'];
+
+export function renderCategoryPicker(selectedId, categories) {
+  const selected = categories.find((c) => c.id === Number(selectedId)) || categories[0];
+  const selectedColor = selected?.color || '#999';
+  return `
+    <div class="cat-picker" data-cat-picker>
+      <input type="hidden" name="categoryId" value="${selected ? selected.id : ''}" />
+      <button type="button" class="cat-picker-trigger" data-cat-trigger>
+        <span class="category-dot" data-cat-dot style="background:${selectedColor}"></span>
+        <span data-cat-label>${selected ? escapeHtml(selected.name) : ''}</span>
+        <i data-lucide="chevron-down"></i>
+      </button>
+      <div class="cat-picker-menu hidden" data-cat-menu>
+        ${categories.map((category) => `
+          <div class="cat-option ${Number(selectedId) === category.id ? 'selected' : ''}" data-cat-opt="${category.id}">
+            <button type="button" class="cat-option-main" data-cat-opt-main="${category.id}">
+              <span class="category-dot" data-cat-dot="${category.id}" style="background:${category.color}"></span>
+              <span class="cat-opt-name">${escapeHtml(category.name)}</span>
+            </button>
+            <span class="cat-opt-swatches">
+              ${CATEGORY_COLORS.map((color) => `<button type="button" class="swatch ${color === category.color ? 'active' : ''}" data-cat-color="${category.id}" data-color="${color}" style="background:${color}" aria-label="${color}"></button>`).join('')}
+            </span>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+export function bindCategoryPickers(root = document) {
+  root.querySelectorAll('[data-cat-picker]').forEach((picker) => {
+    if (picker.dataset.bound) return;
+    picker.dataset.bound = '1';
+    picker.querySelector('[data-cat-trigger]').addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeOpenMenus(picker);
+      picker.querySelector('[data-cat-menu]').classList.toggle('hidden');
+    });
+    picker.querySelectorAll('[data-cat-opt-main]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const id = btn.dataset.catOptMain;
+        const option = picker.querySelector(`[data-cat-opt="${id}"]`);
+        picker.querySelector('input[name="categoryId"]').value = id;
+        picker.querySelector('[data-cat-label]').textContent = option.querySelector('.cat-opt-name').textContent;
+        const color = option.querySelector('.category-dot').style.background;
+        picker.querySelector('[data-cat-dot]').style.background = color;
+        picker.querySelectorAll('.cat-option').forEach((row) => row.classList.toggle('selected', row === option));
+        closeOpenMenus();
+      });
+    });
+    picker.querySelectorAll('[data-cat-color]').forEach((swatch) => {
+      swatch.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const id = Number(swatch.dataset.catColor);
+        const color = swatch.dataset.color;
+        await updateCategory(id, { color });
+        picker.querySelectorAll(`[data-cat-dot="${id}"], [data-cat-opt="${id}"] .swatch`).forEach((el) => {
+          if (el.classList.contains('swatch')) el.classList.toggle('active', el.dataset.color === color);
+          else el.style.background = color;
+        });
+        if (picker.querySelector('input[name="categoryId"]').value === String(id)) {
+          picker.querySelector('[data-cat-dot]').style.background = color;
+        }
+      });
+    });
+  });
+}
+
+function closeOpenMenus(except = null) {
+  document.querySelectorAll('[data-cat-menu]:not(.hidden)').forEach((menu) => {
+    if (except && menu.closest('[data-cat-picker]') === except) return;
+    menu.classList.add('hidden');
+  });
+}
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-cat-picker]')) closeOpenMenus();
+});
 
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
@@ -33,13 +113,13 @@ export function renderSidebar(categories, tasks, activeView) {
           ['priority', 'flag', t('priority_matrix'), ''],
           ['done', 'check-check', t('done'), ''],
           ['archive', 'archive', t('archive'), archivedCount ? String(archivedCount) : '']
-        ].map(([view, iconName, label, count]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}${count ? `<span class="count-pill">${count}</span>` : ''}<span>${label}</span></button>`).join('')}
+        ].map(([view, iconName, label, count]) => `<button class="nav-item ${activeView === view ? 'active' : ''}" data-view="${view}">${icon(iconName)}<span>${label}</span>${count ? `<span class="count-pill">${count}</span>` : ''}</button>`).join('')}
       </div>
       <div class="sidebar-section">
         <p class="sidebar-title">${t('categories')}</p>
         ${categories.map((category) => `
           <button class="category-item ${activeView === `category:${category.id}` ? 'active' : ''}" data-category-id="${category.id}">
-            <span class="category-dot" style="background:${category.color}"></span><span class="count-pill">${countByCategory[category.id] || 0}</span><span>${escapeHtml(category.name)}</span>
+            <span class="category-dot" style="background:${category.color}"></span><span>${escapeHtml(category.name)}</span><span class="count-pill">${countByCategory[category.id] || 0}</span>
           </button>`).join('')}
       </div>
     </div>
@@ -189,6 +269,7 @@ async function renderQuickAddForm() {
   body.onclick = handleQuickAddClick;
   const form = body.querySelector('#create-task-form');
   if (form) form.addEventListener('submit', submitCreateTask);
+  bindCategoryPickers(body);
   refreshIcons();
 }
 
@@ -235,6 +316,7 @@ export async function openTaskDetail(id) {
   });
   document.querySelector('[data-close-task]').addEventListener('click', closeTaskModal);
   document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
+  bindCategoryPickers(document.querySelector('#task-modal-body'));
   refreshIcons();
 }
 
@@ -245,7 +327,7 @@ function taskForm(task, categories, id) {
       <input class="field" name="title" placeholder="${t('task_title_placeholder')}" value="${escapeAttr(task.title || '')}" required />
       <textarea class="textarea" name="description" placeholder="${t('description_placeholder')}">${escapeHtml(task.description || '')}</textarea>
       <div class="two-col form-grid">
-        <select class="select" name="categoryId" required>${categories.map((category) => `<option value="${category.id}" ${Number(task.categoryId) === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select>
+        ${renderCategoryPicker(task.categoryId, categories)}
         <select class="select" name="priority"><option value="high" ${task.priority === 'high' ? 'selected' : ''}>${t('priority_high')}</option><option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>${t('priority_medium')}</option><option value="low" ${task.priority === 'low' ? 'selected' : ''}>${t('priority_low')}</option><option value="pending" ${task.priority === 'pending' ? 'selected' : ''}>${t('priority_pending')}</option></select>
       </div>
       <div class="two-col form-grid">

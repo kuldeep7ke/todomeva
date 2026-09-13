@@ -1,4 +1,4 @@
-﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=6';
+﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=7';
 
 const CONFIG_KEY = 'todoMeva_sync';
 const RECONNECT_INTERVAL = 30000;

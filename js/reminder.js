@@ -1,4 +1,4 @@
-﻿import { getTasks, updateTask } from './db.js?v=6';
+﻿import { getTasks, updateTask } from './db.js?v=7';
 import { isPrefEnabled } from './prefs.js?v=4';
 
 export async function checkAndFireReminders() {
@@ -29,3 +29,4 @@ export async function requestNotificationPermission() {
   }
   return Notification.permission;
 }
+

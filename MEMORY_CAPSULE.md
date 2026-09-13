@@ -110,11 +110,11 @@ Todo Meva/
 Files load with a `?v=N` query param because of browser caching. **Bump `?v=` of any file you edit** — in `index.html` for `style.css`/`app.js`, and in every importing module for `.js` dependencies.
 
 Current versions (2026-09-13):
-- `index.html`: `style.css?v=14`, `js/app.js?v=7`
-- `app.js` imports: `db.js?v=6`, `components.js?v=7`, `views.js?v=7`, `reminder.js?v=7`, `i18n.js?v=7`, `sync.js?v=6`; `prefs.js?v=4`, `account.js?v=4`
-- `components.js` imports `db.js?v=6`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=7`, `prefs.js?v=4`, `sync.js?v=6`
-- `views.js` imports `db.js?v=6`, `components.js?v=7`, `i18n.js?v=7`, `sync.js?v=6`, `prefs.js?v=4`, `account.js?v=4`
-- `db.js` imports `seed.js?v=5`; `reminder.js`/`recurrence.js`/`sync.js` import `db.js?v=6`
+- `index.html`: `style.css?v=16`, `js/app.js?v=8`
+- `app.js` imports: `db.js?v=7`, `components.js?v=9`, `views.js?v=10`, `reminder.js?v=7`, `i18n.js?v=7`, `sync.js?v=6`; `prefs.js?v=4`, `account.js?v=4`
+- `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=7`, `prefs.js?v=4`, `sync.js?v=6`
+- `views.js` imports `db.js?v=7`, `components.js?v=9`, `i18n.js?v=7`, `sync.js?v=6`, `prefs.js?v=4`, `account.js?v=4`
+- `reminder.js`/`sync.js`/`recurrence.js` import `db.js?v=7`
 
 ---
 

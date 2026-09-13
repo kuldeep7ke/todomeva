@@ -1,6 +1,6 @@
-﻿import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=6';
-import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=7';
-import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=7';
+﻿import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
+import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=9';
+import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=10';
 import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
 import { saveProfile } from './account.js?v=4';

@@ -1,5 +1,5 @@
-﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=6';
-import { attachTaskCardEvents, icon, renderTaskCard, refreshIcons } from './components.js?v=7';
+﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
+import { attachTaskCardEvents, bindCategoryPickers, icon, renderCategoryPicker, renderTaskCard, refreshIcons } from './components.js?v=9';
 import { t } from './i18n.js?v=7';
 import { getLang, getLangs } from './i18n.js?v=7';
 import { getNotifyPrefs } from './prefs.js?v=4';
@@ -18,7 +18,7 @@ export async function renderDashboard() {
     <section class="grid stats-grid">
       ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required /><select class="select" name="categoryId">${categories.map((category) => `<option value="${category.id}">${escapeHtml(category.name)}</option>`).join('')}</select><select class="select" name="priority"><option value="medium">${t('priority_medium')}</option><option value="high">${t('priority_high')}</option><option value="low">${t('priority_low')}</option><option value="pending">${t('priority_pending')}</option></select><button class="btn btn-primary">${t('add')}</button></form></section>
+    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required />${renderCategoryPicker(0, categories)}<select class="select" name="priority"><option value="medium">${t('priority_medium')}</option><option value="high">${t('priority_high')}</option><option value="low">${t('priority_low')}</option><option value="pending">${t('priority_pending')}</option></select><button class="btn btn-primary">${t('add')}</button></form></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}
@@ -30,6 +30,7 @@ export async function renderDashboard() {
     window.refreshCurrentView();
   });
   attachTaskCardEvents(content);
+  bindCategoryPickers(content);
   refreshIcons();
 }
 
@@ -80,7 +81,7 @@ export async function renderArchive() {
   const content = document.querySelector('#view-content');
   content.innerHTML = archived.length ? `
     <div class="card">
-      <div class="section-header"><h3>${t('archive')}</h3><span class="muted">${archived.length}</span></div>
+      <div class="section-header"><h3>${t('archive')}<span class="muted count-inline">&nbsp;&middot;&nbsp;${archived.length}</span></h3></div>
       <div class="archive-list">
         ${archived.map((task) => archiveRow(task, categoryMap.get(task.categoryId))).join('')}
       </div>
@@ -294,7 +295,7 @@ function stat(label, value) {
 }
 
 function taskSection(title, tasks, categoryMap) {
-  return `<section class="card"><div class="section-header"><h3>${title}</h3><span class="muted">${tasks.length}</span></div><div class="task-list">${tasks.map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('nothing_here')}</p>`}</div></section>`;
+  return `<section class="card"><div class="section-header"><h3>${title}<span class="muted count-inline">&nbsp;&middot;&nbsp;${tasks.length}</span></h3></div><div class="task-list">${tasks.map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('nothing_here')}</p>`}</div></section>`;
 }
 
 async function loadViewData() {

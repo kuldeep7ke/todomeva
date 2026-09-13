@@ -201,6 +201,10 @@ export async function addCategory(category) {
   return db.categories.add({ ...category, uuid: makeUuid(), order: Date.now() });
 }
 
+export async function updateCategory(id, changes) {
+  return db.categories.update(Number(id), changes);
+}
+
 export async function addActivity(type, taskId, taskTitle, details = '') {
   return db.activities.add({ uuid: makeUuid(), type, taskId, taskTitle, details, timestamp: localDateTimeStr() });
 }

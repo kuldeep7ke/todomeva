@@ -296,7 +296,7 @@ Because `http-server` is run with `-c-1` (no-cache headers) but the page is ofte
 
 ### Phase 6 — Settings & Personalization
 - [x] Settings page (single scrolling page) with 8 section cards
-- [x] **Account**: profile name/email (edit form), saved to `todoMeva_profile`
+- [x] **Account**: profile name/email/contact (contact optional) edit form, saved to `todoMeva_profile`
 - [x] **Appearance / App Color**: dark-mode toggle + 3 segmented brand palettes (Orange/Blue/Emerald)
 - [x] **Language**: English / मराठी / हिंदी segmented picker
 - [x] **Notifications & Popups**: reminders toggle + onboarding popups toggle + live notification-permission status row with working Enable flow
@@ -329,13 +329,11 @@ Because `http-server` is run with `-c-1` (no-cache headers) but the page is ofte
 ## Local Development
 
 ### Start server
-```powershell
-npx --yes http-server -p 3000 -c-1 --cors
-```
+Run `start.bat` (starts Python `http.server` on port 8400, hidden window).
 
 ### Open / hard refresh
 ```
-http://localhost:3000/        Ctrl+F5
+http://127.0.0.1:8400/index.html    Ctrl+F5
 ```
 
 ### Before/after each edit

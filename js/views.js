@@ -1,7 +1,7 @@
 ﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
-import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=11';
-import { t } from './i18n.js?v=9';
-import { getLang, getLangs } from './i18n.js?v=9';
+import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=12';
+import { t } from './i18n.js?v=10';
+import { getLang, getLangs } from './i18n.js?v=10';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
 import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=6';
@@ -143,7 +143,7 @@ export async function renderSettings() {
   const profile = getProfile();
   const sync = getSyncStatus();
   const syncConfig = getSyncConfig();
-  const profileLine = [profile.name, profile.email].filter(Boolean).join(' · ') || t('s_account');
+  const profileLine = [profile.name, profile.contact, profile.email].filter(Boolean).join(' · ') || t('s_account');
 
   content.innerHTML = `
     <div class="grid settings-grid settings-grid-full">
@@ -165,6 +165,10 @@ export async function renderSettings() {
             <div class="field-group">
               <label class="flabel" for="profile-email">${t('s_email')}</label>
               <input class="field" id="profile-email" type="email" placeholder="${t('s_email')}" value="${escapeAttr(profile.email || '')}" />
+            </div>
+            <div class="field-group">
+              <label class="flabel" for="profile-contact">${t('s_contact')} ${t('ob_optional')}</label>
+              <input class="field" id="profile-contact" placeholder="${t('s_contact_ph')}" value="${escapeAttr(profile.contact || '')}" />
             </div>
           </div>
           <p class="muted profile-form-hint">${t('s_privacy_desc')}</p>
@@ -195,15 +199,23 @@ export async function renderSettings() {
         ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notificationsAvailable && Notification.permission === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
       `)}
       ${settingsCard('s_sync', 's_sync_desc', `
+        <p class="muted sync-optional-note">${t('s_sync_optional')}</p>
         <div class="sync-status-row">
           <span class="sync-dot" data-state="${sync.status}"></span>
           <strong id="sync-status-label">${syncStatusLabel()}</strong>
           <span class="muted" id="sync-last-label">${sync.lastSync ? `${t('s_sync_last')} ${formatLastSync(sync.lastSync)}` : ''}</span>
         </div>
         ${sync.error ? `<p class="muted sync-error">${escapeHtml(sync.error)}</p>` : ''}
-        ${settingsRow('link', 's_sync_connect', 's_sync_connect_desc', `<button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>`)}
-        ${settingsRow('refresh-cw', 's_sync_now', 's_sync_now_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>`)}
-        ${settingsRow('x', 's_sync_disconnect', 's_sync_disconnect_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>`)}
+        ${sync.status === 'connected'
+          ? `${settingsRow('refresh-cw', 's_sync_now', 's_sync_now_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>`)}
+        ${settingsRow('x', 's_sync_disconnect', 's_sync_disconnect_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>`)}`
+          : `<form id="sync-connect-form" class="sync-form" autocomplete="off">
+          <input class="field" id="sync-url" type="url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(syncConfig?.url || '')}" autocomplete="off" />
+          <input class="field" id="sync-key" type="password" placeholder="${t('s_sync_key_ph')}" value="${escapeAttr(syncConfig?.key || '')}" autocomplete="new-password" />
+          <div class="sync-actions">
+            <button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>
+          </div>
+        </form>`}
         ${settingsRow('info', 's_sync_how_title', 's_sync_how_desc', `<button class="btn btn-ghost icon-btn sync-how-trigger" type="button" data-settings-action="sync-how-trigger">${t('s_sync_how_title')}</button>`)}
         <div id="sync-how-details" class="hidden">
           <ol>
@@ -235,8 +247,8 @@ export async function renderSettings() {
         </div>
       `)}
       ${settingsCard('s_about', 's_about_desc', `
-        ${settingsRow('shield', 's_privacy', 's_privacy_desc', '<span class="muted settings-check">100% local</span>')}
-        ${settingsRow('info', 's_version', 's_version_desc', '<span class="muted settings-check">v1.0</span>')}
+        ${settingsRow('shield', 's_privacy', 's_privacy_desc', '<span class="muted settings-check">Local by default</span>')}
+        ${settingsRow('info', 's_version', 's_version_desc', '<span class="muted settings-check">v1.1</span>')}
       `)}
     </div>
   `;

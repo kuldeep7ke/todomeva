@@ -19,7 +19,7 @@ Todo Meva is a feature-rich, single-user Productivity & To-Do Application with 8
 | Sync | Supabase JS client (UMD global) | Latest | `vendor/supabase.min.js` |
 | Font | Inter (Google Fonts) | 400–800 wght | CDN |
 | Language | Vanilla JavaScript (ES Modules) | ES2022 | — |
-| Server | http-server (Node.js) | 14.x | `npx --yes http-server -p 3000 -c-1 --cors` |
+| Server | Python `http.server` | 3.x | `start.bat` → `python -m http.server 8400` (visit `http://127.0.0.1:8400/index.html`) |
 
 ---
 
@@ -68,8 +68,8 @@ Todo Meva/
 | `todoMeva_brand` | `orange` \| `blue` \| `green` | Brand palette |
 | `todoMeva_lang` | `en` \| `mr` \| `hi` | Language |
 | `todoMeva_notify_prefs` | `{ reminders: bool, onboarding: bool }` | Notification & popup preferences |
-| `todoMeva_profile` | `{ name, email, updatedAt }` | Account profile |
-| `todoMeva_sync` | `{ url, key }` | Sync config (Supabase URL + anon key) |
+| `todoMeva_profile` | `{ name, email, contact, updatedAt }` | Account profile (`contact` optional) |
+| `todoMeva_sync` | `{ url, key }` | Sync config (Supabase URL + anon key) — optional |
 | `todoMeva_onboarded` | `'1'` | Onboarding shown once |
 
 ---
@@ -110,10 +110,10 @@ Todo Meva/
 Files load with a `?v=N` query param because of browser caching. **Bump `?v=` of any file you edit** — in `index.html` for `style.css`/`app.js`, and in every importing module for `.js` dependencies.
 
 Current versions (2026-09-14):
-- `index.html`: `style.css?v=18`, `js/app.js?v=8`
-- `app.js` imports: `db.js?v=7`, `components.js?v=11`, `views.js?v=11`, `reminder.js?v=7`, `i18n.js?v=8`, `sync.js?v=6`; `prefs.js?v=4`, `account.js?v=4`
-- `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=8`, `prefs.js?v=4`, `sync.js?v=6`
-- `views.js` imports `db.js?v=7`, `components.js?v=11`, `i18n.js?v=8`, `sync.js?v=6`, `prefs.js?v=4`, `account.js?v=4`
+- `index.html`: `style.css?v=20`, `js/app.js?v=10`
+- `app.js` imports: `db.js?v=7`, `components.js?v=12`, `views.js?v=13`, `reminder.js?v=7`, `i18n.js?v=10`, `sync.js?v=6`; `prefs.js?v=4`, `account.js?v=4`
+- `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=10`, `prefs.js?v=4`, `sync.js?v=6`, `account.js?v=4`
+- `views.js` imports `db.js?v=7`, `components.js?v=12`, `i18n.js?v=10`, `sync.js?v=6`, `prefs.js?v=4`, `account.js?v=4`
 - `reminder.js`/`sync.js`/`recurrence.js` import `db.js?v=7`
 
 ---
@@ -231,7 +231,7 @@ Security note: anon has full access by design — acceptable only because each u
 - Landing page with hero, info cards, tagline, footer
 - App shell with sidebar + main panel + FAB
 - Responsive: desktop (side-by-side), tablet (sidebar overlay), mobile (full-screen)
-- Onboarding popup on first visit (toggleable via prefs)
+- Onboarding card on first visit: name (required) + optional contact, no login; Save or Skip (toggleable via prefs)
 
 ### Views (4 + Settings)
 1. **Dashboard** — Stats (overdue/open/completed), quick create form, overdue/today/open task sections
@@ -268,16 +268,22 @@ Security note: anon has full access by design — acceptable only because each u
 - Trilingual UI via `todoMeva_lang`
 
 ### Settings — 8 Sections
-1. **Account** — profile name/email edit form (`todoMeva_profile`)
+1. **Account** — profile name/email/contact (contact optional) edit form (`todoMeva_profile`)
 2. **Appearance / App Color** — dark mode + palette chips (segmented)
 3. **Language** — en / mr / hi segmented picker
 4. **Notifications & Popups** — reminders toggle, onboarding popups toggle, live permission status row with working Enable flow
-5. **Multi-Device Sync** — Supabase URL + anon key form, sync now, disconnect, live status dot (disconnected/connected/syncing/error), embedded schema SQL with copy button
+5. **Multi-Device Sync** — optional connect form (Supabase URL + key), sync now, disconnect, live status dot (disconnected/connected/syncing/error), embedded schema SQL with copy button
 6. **Data** — export / import
 7. **Danger Zone** — Clear all data (must type DELETE), Reset preferences — rows match the global settings rhythm (12px padding, 8px gap)
 8. **About** — version info + Open Landing Page
 
+### Onboarding
+- First-launch modal (once, gated by `todoMeva_onboarded`) with flat profile-style card
+- Asks name (required) + contact (optional, prefilled from `todoMeva_profile.contact`); Save or Skip
+- No password/account creation; data stays local (`todoMeva_profile`)
+
 ### Multi-Device Sync (opt-in)
+- Optional — by default everything stays on this device; connect your own Supabase project to share across devices
 - Config validated against `^https://([a-zA-Z0-9-]+\.)+supabase\.co$`
 - Push: debounced upsert of all local rows as `entity:<uuid>` docs (`onConflict: 'id'`)
 - Pull: select ordered by `updated_at`, applies remote changes, remaps numeric IDs, handles `deleted` tombstones
@@ -315,12 +321,12 @@ Security note: anon has full access by design — acceptable only because each u
 | 4 | Storage | Dexie IndexedDB |
 | 5 | First scope | Full documented app |
 | 6 | Build order | Data → UI → Features |
-| 7 | Dev server | npx http-server |
+| 7 | Dev server | Python http.server |
 | 8 | Dependencies | Vendored local browser builds |
 | 9 | Vendoring method | Download browser builds |
 | 10 | Flat UI palette | Warm productivity |
 | 11 | Reminder UI | Topbar button |
-| 12 | Run check | Started server on port 3000 |
+| 12 | Run check | Started server on port 8400 |
 | — | Logo & favicon | Minimal checklist + checkmark SVG |
 | — | Design direction | Switched from glassmorphism to warm flat UI |
 | — | Mobile UI | Rebuilt for compact view: bottom-sheet modals, centered FAB, compact info cards, stacked footer |
@@ -337,13 +343,14 @@ Security note: anon has full access by design — acceptable only because each u
 | 22 | Settings width | Removed 860px cap — Settings matches dashboard `.main-panel` width |
 | 23 | i18n quality | mr/hi rewritten as natural everyday language (due prefix, repeat phrases, ॲप spelling) |
 | 24 | Danger Zone rhythm | Wrapper `#danger-main` → grid, so the two danger rows get the same 8px gap / 12px padding as every other settings row |
+| 25 | Onboarding & contact | First-launch onboarding card (name required + optional contact, no login) saves `todoMeva_profile.contact`; Settings Account form gains contact field |
 
 ---
 
 ## Server & Access
 
-- **URL:** `http://localhost:3000/`
-- **Command:** `npx --yes http-server -p 3000 -c-1 --cors`
+- **URL:** `http://127.0.0.1:8400/index.html`
+- **Command:** `start.bat` (starts hidden Python `http.server` on 8400); stop with `stop-server.bat`
 - **Refresh:** `Ctrl+F5` (hard refresh after changes)
 
 ---

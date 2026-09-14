@@ -504,6 +504,7 @@ a { color: inherit; text-decoration: none; }
 .field-group .flabel { margin-bottom: 0; }
 .profile-form-hint { margin: 0; font-size: 0.8rem; line-height: 1.5; }
 .profile-form-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.onboarding-privacy { margin: 0; font-size: 0.8rem; line-height: 1.5; }
 
 .segmented { display: inline-flex; gap: 4px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 999px; padding: 4px; }
 .segmented button { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 0.86rem; padding: 0.45rem 0.9rem; border-radius: 999px; cursor: pointer; }

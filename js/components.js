@@ -1,9 +1,10 @@
 ﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { getLang, t } from './i18n.js?v=9';
+import { getLang, t } from './i18n.js?v=10';
 import { isPrefEnabled } from './prefs.js?v=4';
 import { pushDeletion } from './sync.js?v=6';
+import { getProfile, saveProfile } from './account.js?v=4';
 
 let selectedCategoryId = null;
 
@@ -647,12 +648,44 @@ function closeTaskModal() {
 export function showOnboarding() {
   if (!isPrefEnabled('onboarding') || localStorage.getItem('todoMeva_onboarded')) return;
   const overlay = document.querySelector('#onboarding-overlay');
+  if (!overlay) return;
   overlay.classList.remove('hidden');
-  document.querySelector('#onboarding-card').innerHTML = `<p class="eyebrow">${t('ob_welcome')}</p><h3>${t('ob_title')}</h3><p class="muted">${t('ob_body')}</p><button class="btn btn-primary" data-finish-onboarding>${t('ob_start')}</button>`;
-  document.querySelector('[data-finish-onboarding]').addEventListener('click', () => {
+  const card = document.querySelector('#onboarding-card');
+  const profile = getProfile();
+  card.innerHTML = `
+    <p class="eyebrow">${t('ob_welcome')}</p>
+    <h3>${t('ob_title')}</h3>
+    <p class="muted">${t('ob_body')}</p>
+    <form id="onboarding-form" class="profile-form" autocomplete="off">
+      <div class="profile-form-grid">
+        <div class="field-group">
+          <label class="flabel" for="ob-name">${t('s_name')} <span class="req">*</span></label>
+          <input class="field" id="ob-name" placeholder="${t('ob_name_ph')}" value="${escapeAttr(profile.name || '')}" required />
+        </div>
+        <div class="field-group">
+          <label class="flabel" for="ob-contact">${t('ob_contact')} ${t('ob_optional')}</label>
+          <input class="field" id="ob-contact" type="text" placeholder="${t('ob_contact_ph')}" value="${escapeAttr(profile.contact || '')}" />
+        </div>
+      </div>
+      <p class="muted onboarding-privacy">${t('ob_privacy')}</p>
+      <div class="profile-form-actions">
+        <button class="btn btn-ghost" type="button" data-skip-onboarding>${t('ob_skip')}</button>
+        <button class="btn btn-primary" type="submit">${t('ob_finish')}</button>
+      </div>
+    </form>`;
+  const finish = () => {
     localStorage.setItem('todoMeva_onboarded', '1');
     overlay.classList.add('hidden');
+  };
+  card.querySelector('#onboarding-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveProfile({
+      name: card.querySelector('#ob-name').value.trim(),
+      contact: card.querySelector('#ob-contact').value.trim(),
+    });
+    finish();
   });
+  card.querySelector('[data-skip-onboarding]').addEventListener('click', finish);
 }
 
 function escapeHtml(value) {

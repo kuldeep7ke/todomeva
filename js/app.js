@@ -1,11 +1,12 @@
-﻿import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
+import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
 import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=12';
-import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=13';
+import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=18';
 import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
 import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=10';
-import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=6';
+import { initLang, setLang, t } from './i18n.js?v=11';
+import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=8';
+import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=4';
 
 let activeView = 'dashboard';
 let initPromise = null;
@@ -36,6 +37,7 @@ async function initApp() {
     await refreshCurrentView();
     showOnboarding();
     autoConnect();
+    initBroadcasts();
     setInterval(checkAndFireReminders, 30000);
     setInterval(tickFocusTimers, 1000);
   })();
@@ -43,7 +45,7 @@ async function initApp() {
 }
 
 async function autoConnect() {
-  const { autoConnect: connect } = await import('./sync.js?v=6');
+  const { autoConnect: connect } = await import('./sync.js?v=8');
   await connect();
 }
 
@@ -134,8 +136,6 @@ async function refreshCurrentView() {
 }
 
 function wireSettingsEvents() {
-  const form = document.querySelector('#sync-connect-form');
-  if (form) form.addEventListener('submit', handleSyncConnect);
   const dangerInput = document.querySelector('#danger-confirm-input');
   if (dangerInput) {
     dangerInput.addEventListener('input', () => {
@@ -288,7 +288,27 @@ async function runSettingsAction(action) {
     return;
   }
   if (key === 'sync-how-trigger') {
-    document.querySelector('#sync-how-details')?.classList.toggle('hidden');
+    const details = document.querySelector('#sync-how-details');
+    if (details) {
+      details.classList.toggle('hidden');
+      const trigger = document.querySelector('.sync-how-trigger');
+      if (trigger) trigger.setAttribute('aria-expanded', String(!details.classList.contains('hidden')));
+    }
+    return;
+  }
+  if (key === 'bc-copy-id') {
+    try {
+      await navigator.clipboard.writeText(getDeviceId());
+      const btn = document.querySelector('[data-settings-action="bc-copy-id"]');
+      if (btn) {
+        btn.textContent = t('bc_copied');
+        setTimeout(() => { btn.textContent = t('bc_copy_id'); }, 1500);
+      }
+    } catch {}
+    return;
+  }
+  if (key === 'bc-refresh') {
+    await refreshBroadcasts();
     return;
   }
   if (key === 'danger-show') {

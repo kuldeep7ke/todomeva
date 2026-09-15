@@ -193,7 +193,21 @@ const messages = {
     s_privacy: 'Privacy',
     s_privacy_desc: 'No accounts. No passwords. Data stays on this device by default — optionally sync across your own devices.',
     s_version: 'Version',
-    s_version_desc: '1.1 — Icons by Lucide · Font by Inter'
+    s_version_desc: '1.1 — Icons by Lucide · Font by Inter',
+    s_broadcasts: 'Broadcasts',
+    s_broadcasts_desc: 'Live messages and promos pushed by any authorized site (via jsonbin.io).',
+    bc_device_id: 'Device ID',
+    bc_device_id_desc: 'Your private id. A broadcast whose targetId matches shows only here.',
+    bc_copy_id: 'Copy ID',
+    bc_copied: 'Copied!',
+    bc_state: 'Status',
+    bc_listening: 'Listening',
+    bc_refresh: 'Refresh',
+    bc_updated: 'Updated',
+    bc_offline: 'Offline — retrying…',
+    bc_not_configured: 'Not configured',
+    bc_close: 'Close',
+    bc_banner: 'Promotion'
   },
   mr: {
     app_name: 'टुडो मेवा',
@@ -387,7 +401,21 @@ const messages = {
     s_privacy: 'गोपनीयता',
     s_privacy_desc: 'कोणतेही खाते नाही, पासवर्ड नाही. डेटा डीफॉल्टनुसार या डिव्हाइसवरच राहतो — हवे असल्यास तुमच्या स्वतःच्या डिव्हाइसमध्ये सिंक करा.',
     s_version: 'आवृत्ती',
-    s_version_desc: '1.1 — Lucide आयकॉन · Inter फॉन्ट'
+    s_version_desc: '1.1 — Lucide आयकॉन · Inter फॉन्ट',
+    s_broadcasts: 'प्रसारणे',
+    s_broadcasts_desc: 'कोणत्याही अधिकृत साइटकडून थेट संदेश आणि प्रचार (jsonbin.io द्वारे).',
+    bc_device_id: 'डिव्हाइस आयडी',
+    bc_device_id_desc: 'तुमचा खाजगी आयडी. targetId जुळणारे प्रसारण फक्त इथे दिसते.',
+    bc_copy_id: 'आयडी कॉपी करा',
+    bc_copied: 'कॉपी झाले!',
+    bc_state: 'स्थिती',
+    bc_listening: 'सक्रिय',
+    bc_refresh: 'रीफ्रेश',
+    bc_updated: 'अपडेट',
+    bc_offline: 'ऑफलाइन — पुन्हा प्रयत्न करत आहे…',
+    bc_not_configured: 'कॉन्फिगर केलेले नाही',
+    bc_close: 'बंद करा',
+    bc_banner: 'प्रचार'
   },
 hi: {
     app_name: 'टुडो मेवा',
@@ -581,7 +609,21 @@ hi: {
     s_privacy: 'गोपनीयता',
     s_privacy_desc: 'कोई खाता नहीं, कोई पासवर्ड नहीं। डेटा डिफ़ॉल्ट रूप से इसी डिवाइस पर रहता है — चाहें तो अपने डिवाइसों में सिंक करें।',
     s_version: 'संस्करण',
-    s_version_desc: '1.1 — Lucide आइकन · Inter फ़ॉन्ट'
+    s_version_desc: '1.1 — Lucide आइकन · Inter फ़ॉन्ट',
+    s_broadcasts: 'प्रसारण',
+    s_broadcasts_desc: 'किसी भी अधिकृत साइट के लाइव संदेश और प्रचार (jsonbin.io द्वारा).',
+    bc_device_id: 'डिवाइस आईडी',
+    bc_device_id_desc: 'आपकी निजी आईडी। targetId मिलान वाला प्रसारण केवल यहीं दिखेगा.',
+    bc_copy_id: 'आईडी कॉपी करें',
+    bc_copied: 'कॉपी हो गया!',
+    bc_state: 'स्थिति',
+    bc_listening: 'सक्रिय',
+    bc_refresh: 'रीफ़्रेश',
+    bc_updated: 'अपडेट',
+    bc_offline: 'ऑफ़लाइन — दोबारा कोशिश जारी…',
+    bc_not_configured: 'कॉन्फ़िगर नहीं हुआ',
+    bc_close: 'बंद करें',
+    bc_banner: 'प्रचार'
   }
 };
 

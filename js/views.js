@@ -1,10 +1,11 @@
-﻿import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
+import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
 import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=12';
-import { t } from './i18n.js?v=10';
-import { getLang, getLangs } from './i18n.js?v=10';
+import { t } from './i18n.js?v=11';
+import { getLang, getLangs } from './i18n.js?v=11';
+import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=4';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
-import { getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=6';
+import { getLastUrl, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=8';
 
 export async function renderDashboard() {
   const { categories, tasks, categoryMap } = await loadViewData();
@@ -188,16 +189,33 @@ export async function renderSettings() {
             <button class="palette-chip ${brand === 'green' ? 'active' : ''}" style="--chip:#16a34a" data-settings-action="brand" data-brand="green" aria-label="${t('s_color_green')}">${t('s_color_green')}</button>
           </div>`)}
       `)}
-      ${settingsCard('s_language', 's_language_desc', `
-        ${settingsRow('globe', 's_en', 's_en_desc', `<button class="${getLang() === 'en' ? 'active' : ''}" data-settings-action="lang" data-lang="en">${getLangs()['en']}</button>`)}
-        ${settingsRow('globe', 's_mr', 's_mr_desc', `<button class="${getLang() === 'mr' ? 'active' : ''}" data-settings-action="lang" data-lang="mr">${getLangs()['mr']}</button>`)}
-        ${settingsRow('globe', 's_hi', 's_hi_desc', `<button class="${getLang() === 'hi' ? 'active' : ''}" data-settings-action="lang" data-lang="hi">${getLangs()['hi']}</button>`)}
-      `)}
+      ${settingsCardIcon('s_language', 's_language_desc', 'purple', icon('languages'), `
+        <div class="segmented">
+          ${(['en', 'mr', 'hi']).map((code) => `<button class="${getLang() === code ? 'active' : ''}" data-settings-action="lang" data-lang="${code}">${getLangs()[code]}</button>`).join('')}
+        </div>`)}
       ${settingsCardIcon('s_notifications', 's_notifications_desc', 'blue', icon('bell-ring'), `
         ${settingsRow('bell', 's_notif_reminders', 's_notif_reminders_desc', `<button class="setting-switch ${notifyPrefs.reminders ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.reminders}" aria-label="${t('s_notif_reminders')}" data-settings-action="pref-reminders"></button>`)}
         ${settingsRow('message-circle', 's_notif_popups', 's_notif_popups_desc', `<button class="setting-switch ${notifyPrefs.onboarding ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.onboarding}" aria-label="${t('s_notif_popups')}" data-settings-action="pref-onboarding"></button>`)}
         ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notificationsAvailable && Notification.permission === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
       `)}
+      ${settingsCardIcon('s_broadcasts', 's_broadcasts_desc', 'purple', icon('megaphone'), `
+        <div class="settings-row">
+          <div class="settings-row-icon">${icon('smartphone')}</div>
+          <div class="settings-row-copy">
+            <strong>${t('bc_device_id')}</strong>
+            <span class="muted bc-device-id">${escapeHtml(getDeviceId())}</span>
+            <span class="muted bc-device-hint">${t('bc_device_id_desc')}</span>
+          </div>
+          <button class="btn btn-ghost" type="button" data-settings-action="bc-copy-id">${t('bc_copy_id')}</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-icon">${icon('radio')}</div>
+          <div class="settings-row-copy">
+            <strong>${t('bc_state')}</strong>
+            <span class="muted" id="bc-state">${getBroadcastStatus()}</span>
+          </div>
+          <button class="btn btn-ghost" type="button" data-settings-action="bc-refresh">${t('bc_refresh')}</button>
+        </div>`)}
       ${settingsCard('s_sync', 's_sync_desc', `
         <p class="muted sync-optional-note">${t('s_sync_optional')}</p>
         <div class="sync-status-row">
@@ -210,13 +228,13 @@ export async function renderSettings() {
           ? `${settingsRow('refresh-cw', 's_sync_now', 's_sync_now_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>`)}
         ${settingsRow('x', 's_sync_disconnect', 's_sync_disconnect_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>`)}`
           : `<form id="sync-connect-form" class="sync-form" autocomplete="off">
-          <input class="field" id="sync-url" type="url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(syncConfig?.url || '')}" autocomplete="off" />
+          <input class="field" id="sync-url" type="url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(syncConfig?.url || getLastUrl() || '')}" autocomplete="off" />
           <input class="field" id="sync-key" type="password" placeholder="${t('s_sync_key_ph')}" value="${escapeAttr(syncConfig?.key || '')}" autocomplete="new-password" />
           <div class="sync-actions">
             <button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>
           </div>
         </form>`}
-        ${settingsRow('info', 's_sync_how_title', 's_sync_how_desc', `<button class="btn btn-ghost icon-btn sync-how-trigger" type="button" data-settings-action="sync-how-trigger">${t('s_sync_how_title')}</button>`)}
+        ${settingsRow('info', 's_sync_how_title', 's_sync_how_desc', `<button class="btn btn-ghost sync-how-trigger" type="button" data-settings-action="sync-how-trigger" aria-expanded="false" aria-controls="sync-how-details">${icon('chevron-down')} ${t('s_sync_how_title')}</button>`)}
         <div id="sync-how-details" class="hidden">
           <ol>
             <li>${t('s_sync_sql_step1')}</li>

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "todo-meva-welcome",
+    "title": "Welcome to Todo Meva",
+    "message": "Broadcasts are live. Edit this bin on jsonbin.io, save, and the pill shows here within 60s.",
+    "type": "info",
+    "pinned": false,
+    "expires": "2030-12-31",
+    "link": "https://github.com/kuldeep7ke/todomeva"
+  },
+  {
+    "id": "todo-meva-targeted-sample",
+    "title": "Targeted message",
+    "message": "This pill only shows on the device whose id matches targetId.",
+    "type": "warning",
+    "pinned": false,
+    "expires": "2030-12-31",
+    "targetId": ""
+  }
+]

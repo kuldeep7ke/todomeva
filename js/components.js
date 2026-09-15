@@ -1,9 +1,9 @@
 ﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { getLang, t } from './i18n.js?v=10';
+import { getLang, t } from './i18n.js?v=11';
 import { isPrefEnabled } from './prefs.js?v=4';
-import { pushDeletion } from './sync.js?v=6';
+import { pushDeletion } from './sync.js?v=8';
 import { getProfile, saveProfile } from './account.js?v=4';
 
 let selectedCategoryId = null;

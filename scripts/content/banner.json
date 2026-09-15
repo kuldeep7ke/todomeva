@@ -1,0 +1,11 @@
+{
+  "id": "todo-meva-banner-welcome",
+  "title": "Todo Meva is ready",
+  "content": "Banner promos go here. Edit this bin on jsonbin.io, save, and it shows once per fresh load. Image field is optional.",
+  "image": "https://placehold.co/800x400/F97316/FFFFFF?text=Todo+Meva",
+  "href": "https://github.com/kuldeep7ke/todomeva",
+  "width": "480",
+  "startDate": "2026-01-01",
+  "expires": "2030-12-31",
+  "targetId": ""
+}

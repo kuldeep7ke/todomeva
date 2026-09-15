@@ -1,6 +1,7 @@
 ﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=7';
 
 const CONFIG_KEY = 'todoMeva_sync';
+const LAST_URL_KEY = 'todoMeva_syncLastUrl';
 const RECONNECT_INTERVAL = 30000;
 const PUSH_DEBOUNCE = 800;
 const PULL_DEBOUNCE = 1200;
@@ -68,7 +69,7 @@ function emit() {
 }
 
 function entityTable(entity) {
-  return entity === 'category' ? 'categories' : `${entity}s`;
+  return ({ category: 'categories', activity: 'activities' }[entity] || `${entity}s`);
 }
 
 function isConnected() {
@@ -266,7 +267,9 @@ export async function connectSync(url, key) {
     emit();
     throw new Error(state.error);
   }
-  if (!URL_RE.test(String(url).trim())) {
+let raw = String(url).trim();
+  if (raw && !/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  if (!URL_RE.test(raw)) {
     state.error = 'Enter a valid Supabase URL like https://xxxx.supabase.co';
     emit();
     throw new Error(state.error);
@@ -277,8 +280,8 @@ export async function connectSync(url, key) {
     throw new Error(state.error);
   }
   disconnectSync();
-  state.client = window.supabase.createClient(String(url).trim(), String(key).trim(), { auth: { persistSession: false } });
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({ url: String(url).trim(), key: String(key).trim() }));
+  state.client = window.supabase.createClient(raw, String(key).trim(), { auth: { persistSession: false } });
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({ url: raw, key: String(key).trim() }));
   state.onlineHandler = () => {
     if (!state.applyingRemote) {
       pushAll();
@@ -287,8 +290,13 @@ export async function connectSync(url, key) {
   };
   window.addEventListener('online', state.onlineHandler);
   startRealtime();
-  await pushAll();
+await pushAll();
   await applyRemote();
+  localStorage.setItem(LAST_URL_KEY, raw);
+}
+
+export function getLastUrl() {
+  return localStorage.getItem(LAST_URL_KEY) || '';
 }
 
 export async function manualSync() {

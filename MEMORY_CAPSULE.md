@@ -1,160 +1,161 @@
 # Todo Meva — Memory Capsule
 
-*Last Updated: 2026-09-13*
+*Last updated: 2026-09-15*
 
 ---
 
-## Project Overview
+## 1. What this is
 
-Todo Meva is a feature-rich, single-user Productivity & To-Do Application with 8 smart categories, 48 domain-specific templates, scheduling, recurrence, reminder capabilities, persistent light/dark themes, 3 brand palettes, trilingual i18n (English / मराठी / हिंदी), and an opt-in multi-device sync that uses the user's own Supabase project. Built as an offline-first SPA with a warm flat UI design system.
+Todo Meva is a single-user, offline-first to-do/productivity SPA. 8 smart categories, 48 templates, recurring tasks, reminders, trilingual UI (English / मराठी / हिंदी), light/dark + 3 brand palettes, and an opt-in multi-device sync that uses the *user's own* Supabase project.
 
----
+It ships on three surfaces from one source tree:
 
-## Tech Stack
+| Surface | URL | Build |
+|---|---|---|
+| GitHub Pages | https://kuldeep7ke.github.io/todomeva/ | `pages.yml` (static copy: `index.html` + `css/js/assets/vendor`) |
+| Cloudflare Pages | https://todomeva.pages.dev | `deploy-cloudflare.yml` (whole repo incl. `functions/`) |
+| Android APK | artifact `Todomeva-APK` from the **Build Android APK** workflow | `build-apk.yml` (Capacitor 8 + debug keystore) |
 
-| Layer | Technology | Version | Source |
-|-------|-----------|---------|--------|
-| Storage | Dexie.js (IndexedDB wrapper) | 3.2.4 | `vendor/dexie.min.js` |
-| Icons | Lucide Icons | Latest | `vendor/lucide.min.js` |
-| Sync | Supabase JS client (UMD global) | Latest | `vendor/supabase.min.js` |
-| Font | Inter (Google Fonts) | 400–800 wght | CDN |
-| Language | Vanilla JavaScript (ES Modules) | ES2022 | — |
-| Server | Python `http.server` | 3.x | `start.bat` → `python -m http.server 8400` (visit `http://127.0.0.1:8400/index.html`) |
+Repo is **public** (`kuldeep7ke/todomeva`, branch `main`). No secrets live in the repo — sync config is user-entered `localStorage`.
 
 ---
 
-## Project Structure
+## 2. Tech stack
+
+| Layer | Technology | Version | Where |
+|---|---|---|---|
+| App language | Vanilla JS (ES modules) | ES2022 | `js/` |
+| Local storage | Dexie.js (IndexedDB) | 3.2.4 | `vendor/dexie.min.js` |
+| Icons | Lucide | latest | `vendor/lucide.min.js` |
+| Opt-in sync | Supabase JS client (UMD global) | latest | `vendor/supabase.min.js` |
+| Android wrapper | Capacitor | 8.5.x | `node_modules/`, `android/` |
+| Native notifications | Capacitor LocalNotifications | 8.0.x | `node_modules/` |
+| Font | Inter (Google Fonts CDN) | 400–800 | CDN |
+| Dev server | Python `http.server` | 3.x | `start.bat` → `:8400` |
+| CI | GitHub Actions | — | `.github/workflows/` |
+
+**No bundler, no framework, no build step for the web app.** The web code is served as-is. Capacitor copies it into the Android project; version fields are patched into `build.gradle` by a script.
+
+---
+
+## 3. Tooling & versioning
+
+- `VERSION` file holds `v<major>.<minor>.<patch>.<build>` — currently **v1.0.0.0**.
+- `scripts/bump-version.cjs` — bumps `VERSION` by type (`patch` default / `minor` / `major`).
+- `scripts/update-android-version.cjs` — reads `VERSION`, writes `versionCode` (`major*1e8 + minor*1e6 + patch*1e4 + build`) + `versionName` into `android/app/build.gradle`.
+- `scripts/build-web.cjs` — `npm run build`; wipes `www/` and stages `index.html, css, js, assets, vendor`.
+- `scripts/broadcast-tool.cjs` — manages jsonbin bins (`setup` / `bake` / `publish`), needs `JSONBIN_MASTER_KEY`.
+- npm scripts: `build`, `version:patch|minor|major`, `cap:sync`, `cap:copy`, `cap:build`.
+
+---
+
+## 4. Cache versioning (operational rule)
+
+Every file loads with a `?v=N` query param because of browser caching. **When you edit a module, bump its `?v=` in every importer** (and in `index.html` for CSS/entry JS).
+
+Current versions (verified 2026-09-15):
+- `index.html`: `css/style.css?v=21`, `js/app.js?v=15`
+- `app.js` imports: `db?v=7`, `components?v=12`, `views?v=18`, `reminder?v=7`, `prefs?v=4`, `account?v=4`, `i18n?v=11`, `sync?v=8`, `broadcast?v=4`
+- `views.js` imports: `db?v=7`, `components?v=12`, `i18n?v=11`, `broadcast?v=4`, `prefs?v=4`, `account?v=4`, `reminder?v=7`, `sync?v=8`
+- `components.js` imports: `db?v=7`, `seed?v=5`, `recurrence?v=6`, `i18n?v=11`, `prefs?v=4`, `sync?v=8`, `account?v=4`
+- `reminder.js` imports: `db?v=7`, `prefs?v=4`
+- `sync.js` / `recurrence.js` / `broadcast.js` import `db?v=7` / `i18n?v=11`
+- `db.js` imports `seed?v=5`
+
+---
+
+## 5. Project structure
 
 ```
-Todo Meva/
-├── index.html                    # Landing page + App shell + Modals + Onboarding (theme/brand/lang preload + cache versions)
-├── MEMORY_CAPSULE.md             # This file — full project memory
-├── FROM_SCRATCH.md               # Build plan & step-by-step progress
-├── assets/
-│   ├── favicon.svg               # SVG favicon (checklist + checkmark)
-│   ├── logo.svg                  # App brand logo
-│   └── palette.md                # Flat UI color reference
-├── css/
-│   └── style.css                 # Warm flat UI system + brand palettes + settings/sync/notif styles
-├── js/
-│   ├── app.js                    # Orchestrator: init, navigation, events, settings actions, theme/brand, export/import, notification-permission flow
-│   ├── db.js                     # Dexie IndexedDB schema v3 (uuid), CRUD, activity tracking
-│   ├── seed.js                   # 8 categories + 48 smart templates
-│   ├── components.js             # UI: sidebar, task cards, quick add, edit modal, onboarding
-│   ├── views.js                  # View renderers incl. settings, notifications panel + badge
-│   ├── recurrence.js             # Recurring task calculation engine
-│   ├── reminder.js               # Web Notifications API (returns live permission state) + periodic checker
-│   ├── i18n.js                   # Translations (en/mr/hi) + t()/setLang/translateStatic/initLang
-│   ├── prefs.js                  # Notification & popup preferences
-│   ├── account.js                # Profile (name/email)
-│   └── sync.js                   # Multi-device sync engine + SCHEMA_SQL
-├── supabase/
-│   └── schema.sql                # sync_docs schema (same SQL embedded in sync.js)
-└── vendor/
-    ├── dexie.min.js              # Dexie 3.2.4 local browser build
-    ├── lucide.min.js             # Lucide local browser build
-    └── supabase.min.js           # Supabase JS client (best-effort UMD global)
+todomeva/
+├── index.html                    # Landing + app shell + modals + onboarding (preload theme/brand/lang)
+├── MEMORY_CAPSULE.md             # this file
+├── FROM_SCRATCH.md               # build plan & progress
+├── README.md                     # front door / install / build docs
+├── VERSION                       # v1.0.0.0
+├── package.json                  # Capacitor deps + npm scripts
+├── capacitor.config.json         # appId com.kuldeep.todomeva, local notifications smallIcon/color
+├── .gitignore                    # www/, todomeva-release.keystore, ./playwright/, root png
+├── assets/                       # favicon.svg, logo.svg, palette.md
+├── css/style.css                 # flat UI system + 3 brand palettes + notif/sync/broadcast styles
+├── js/                           # ES modules (graph in §7)
+│   ├── app.js                    #   orchestrator: init, nav, events, settings, theme/brand, export/import
+│   ├── db.js                     #   Dexie v3 schema (uuid), CRUD, activity tracking
+│   ├── seed.js                   #   8 categories + 48 templates
+│   ├── components.js             #   sidebar, task cards, quick add, edit modal, pickers, onboarding
+│   ├── views.js                  #   Dashboard/Upcoming/Category/Priority/Settings + notif panel/badge
+│   ├── recurrence.js             #   recurring-task calculation engine
+│   ├── reminder.js               #   Capacitor LocalNotifications bridge + web fallback + 30s checker
+│   ├── i18n.js                   #   en/mr/hi dictionaries + t()/setLang/translateStatic/initLang
+│   ├── prefs.js                  #   notification & popup preferences
+│   ├── account.js                #   profile (name/email/contact), todoMeva_profile
+│   ├── sync.js                   #   opt-in Supabase sync engine + SCHEMA_SQL
+│   └── broadcast.js              #   announcement pills + banner modal + proxy fetch
+├── supabase/schema.sql           # sync_docs DDL (embedded in sync.js as SCHEMA_SQL)
+├── vendor/                       # dexie.min.js, lucide.min.js, supabase.min.js (local builds)
+├── functions/api/announcements.js  # CF Pages edge-cached jsonbin proxy
+├── scripts/                      # build-web / bump-version / update-android-version / broadcast-tool
+│   └── content/                  #   broadcast.json, banner.json (published via broadcast-tool)
+├── android/                      # Capacitor Android project
+│   └── app/
+│       ├── build.gradle          #   debug signing via committed debug.keystore; release unsigned
+│       ├── debug.keystore        #   standard Android debug key (committed, non-secret)
+│       └── src/main/res/drawable/ic_stat_notify.xml
+├── docs/
+│   ├── ANNOUNCEMENTS-EDGE-PROXY-GUIDE.md   # reusable edge-proxy playbook
+│   ├── BROADCAST-GUIDE.md                  # editing broadcast/banner bins day-to-day
+│   └── superpowers/specs/                  # design specs (create-task-form, ...)
+└── .github/workflows/
+    ├── build-apk.yml                       # APK artifact, no secrets
+    ├── pages.yml                           # GitHub Pages
+    └── deploy-cloudflare.yml               # CF Pages + functions (needs repo secrets, else skipped)
 ```
-
-> Modules `i18n.js`, `prefs.js`, `account.js`, `sync.js` (+ `supabase/` + `vendor/supabase.min.js`) are uncommitted — see Git.
 
 ---
 
-## Persistence Keys (localStorage)
+## 6. Persistence keys (localStorage)
 
 | Key | Value | Purpose |
-|-----|-------|---------|
+|---|---|---|
 | `todoMeva_theme` | `light` \| `dark` | Theme, applied pre-paint |
 | `todoMeva_brand` | `orange` \| `blue` \| `green` | Brand palette |
 | `todoMeva_lang` | `en` \| `mr` \| `hi` | Language |
-| `todoMeva_notify_prefs` | `{ reminders: bool, onboarding: bool }` | Notification & popup preferences |
+| `todoMeva_notify_prefs` | `{ reminders: bool, onboarding: bool }` | Notification & popup prefs |
 | `todoMeva_profile` | `{ name, email, contact, updatedAt }` | Account profile (`contact` optional) |
 | `todoMeva_sync` | `{ url, key }` | Sync config (Supabase URL + anon key) — optional |
 | `todoMeva_onboarded` | `'1'` | Onboarding shown once |
+| `todoMeva_deviceId` | uuid | Stable device id for broadcast `targetId` targeting |
+| `todoMeva_dismissedBroadcasts` | `["id", ...]` | Dismissed pill ids (per device) |
+| `todoMeva_announcementsApi` | URL | Override announcements proxy (dev/testing) |
+| `todoMeva_jsonbinBase` / `todoMeva_broadcastBin` / `todoMeva_bannerBin` | URL / ids | Dev overrides for broadcast fetching |
 
 ---
 
-## Design System
+## 7. Module architecture
 
-### Flat UI Palette (Orange — default)
-
-| Role | Light Hex | Dark Hex | Usage |
-|------|-----------|----------|-------|
-| Background | `#f7f3ee` | `#191715` | Body background |
-| Surface | `#ffffff` | `#24211e` | Cards, sidebar, modals |
-| Soft surface | `#fff8ef` | `#2d2823` | Soft backgrounds |
-| Text | `#2d2a24` | `#fff7ed` | Main text |
-| Muted | `#7c7164` | `#c8b8a7` | Secondary text |
-| Border | `#e6d9ca` | `#463c33` | Borders |
-| Accent | `#f97316` | `#fb923c` | Buttons, active states |
-| Accent strong | `#ea580c` | `#f97316` | Button hover |
-| Success | `#16a34a` | `#16a34a` | Low priority, completed |
-| Warning | `#d97706` | `#d97706` | Medium priority |
-| Danger | `#dc2626` | `#dc2626` | High priority, overdue |
-
-### Brand Palettes
-
-`[data-brand="blue"]` and `[data-brand="green"]` override the accent tokens for both themes (CSS custom properties). Default is orange (no attribute). Palette chips in Settings → Appearance.
-
-### Design Tokens
-- Border radius: 22px (cards), 999px (buttons/badges), 18px (task cards)
-- Shadow: `0 18px 45px rgba(67, 48, 33, 0.12)`
-- Font: Inter, system-ui sans-serif
-- Sync status dot uses `@keyframes syncPulse`
-- Settings panel width == dashboard `.main-panel` (`min(1180px, calc(100% - 32px))`); `.settings-grid-full` no longer capped at 860px
-
----
-
-## Cache Versioning Convention
-
-Files load with a `?v=N` query param because of browser caching. **Bump `?v=` of any file you edit** — in `index.html` for `style.css`/`app.js`, and in every importing module for `.js` dependencies.
-
-Current versions (2026-09-14):
-- `index.html`: `style.css?v=20`, `js/app.js?v=10`
-- `app.js` imports: `db.js?v=7`, `components.js?v=12`, `views.js?v=13`, `reminder.js?v=7`, `i18n.js?v=10`, `sync.js?v=6`; `prefs.js?v=4`, `account.js?v=4`
-- `components.js` imports `db.js?v=7`, `seed.js?v=5`, `recurrence.js?v=6`, `i18n.js?v=10`, `prefs.js?v=4`, `sync.js?v=6`, `account.js?v=4`
-- `views.js` imports `db.js?v=7`, `components.js?v=12`, `i18n.js?v=10`, `sync.js?v=6`, `prefs.js?v=4`, `account.js?v=4`
-- `reminder.js`/`sync.js`/`recurrence.js` import `db.js?v=7`
-
----
-
-## Module Architecture
-
-### Dependency Graph
+### Dependency graph
 ```
 index.html → app.js
-              ├── db.js (database layer)
-              ├── seed.js (via db.js)
-              ├── components.js (UI components)
-              │   ├── db.js
-              │   ├── seed.js (config only)
-              │   ├── recurrence.js
-              │   ├── i18n.js
-              │   └── prefs.js
-              ├── views.js (view renderers)
-              │   ├── db.js
-              │   ├── components.js
-              │   ├── i18n.js
-              │   ├── prefs.js (getNotifyPrefs)
-              │   ├── account.js (getProfile)
-              │   └── sync.js (getSyncConfig/getSyncStatus/SCHEMA_SQL)
-              ├── reminder.js (notifications)
-              │   ├── db.js
-              │   └── prefs.js
-              ├── i18n.js (translations)
-              ├── prefs.js (preferences)
-              ├── account.js (profile)
-              └── sync.js (sync engine)
-                  └── db.js
+             ├── db.js ──→ seed.js
+             ├── components.js ──→ db, seed (config), recurrence, i18n, prefs, sync, account
+             ├── views.js ──→ db, components, i18n, broadcast, prefs, account, reminder, sync
+             ├── reminder.js ──→ db, prefs
+             ├── broadcast.js ──→ i18n
+             ├── i18n.js
+             ├── prefs.js
+             ├── account.js
+             └── sync.js ──→ db
 ```
 No circular dependencies.
 
+### Reminder path (native-first, browser fallback)
+`reminder.js` resolves `window.Capacitor.isNativePlatform()` → uses `Capacitor.Plugins.LocalNotifications` (`checkPermissions` / `requestPermissions` / `schedule`) on Android; otherwise the Web Notifications API. `isNotificationsSupported()` and `getNotificationPermission()` are async, Capacitor-aware, and consumed by `views.js` for the live permission row and Enable button.
+
 ---
 
-## Database Schema (Dexie v3)
+## 8. Database schema (Dexie v3)
 
-**DB name:** `TodoMevaDB`
-**Version:** 3 (v2 → v3 adds `uuid` to every row; indexes include uuid)
+**DB name:** `TodoMevaDB` — **version:** 3 (v2 → v3 added `uuid` to every row; indexes include uuid).
 
 ```
 categories:  ++id, uuid, name, icon, color, order
@@ -165,13 +166,13 @@ tasks:       ++id, uuid, title, description, categoryId, templateId, priority,
 activities:  ++id, uuid, type, taskId, taskTitle, details, timestamp
 ```
 
-Activity types: `task_created`, `task_completed`, `task_deleted`, `task_updated`, `task_recurred`
+Activity types: `task_created`, `task_completed`, `task_deleted`, `task_updated`, `task_recurred`. `makeUuid()` uses `crypto.randomUUID()` with a `Math.random` fallback. Task status covers `todo / in_progress / completed` plus archive/focus lifecycle (`archiveTaskById`, `purgeTaskById`, `restoreTaskById`, `startFocus/stopFocus`, `sendToPending`) exposed by `db.js`.
 
 ---
 
-## Remote Sync Schema (Supabase)
+## 9. Remote sync schema (Supabase, opt-in)
 
-Single table, user-owned project. Run `supabase/schema.sql` (or the embedded `SCHEMA_SQL` in `sync.js`) once in the Supabase SQL Editor:
+Single table, user-owned project. Run `supabase/schema.sql` (or `SCHEMA_SQL` from `sync.js`) once in the Supabase SQL Editor:
 
 ```sql
 create table sync_docs (
@@ -181,236 +182,226 @@ create table sync_docs (
   updated_at timestamptz not null default now()
 );
 -- indexes on (entity) and (updated_at)
--- RLS enabled with policy sync_docs_anon_all (for all, to anon, using true)
+-- RLS enabled, policy sync_docs_anon_all (for all, to anon, using true)
 -- added to publication supabase_realtime
 ```
 
-Security note: anon has full access by design — acceptable only because each user supplies their own private project.
+Security note: anon has full access by design — acceptable only because each user connects their own private project.
 
 ---
 
-## Seed Data
+## 10. Seed data
 
-### 8 Categories
+8 categories, each with 6 templates (48 total). Re-seeded by `seedDatabase()` only when categories are empty (categories + templates — never demo tasks).
 
-| # | Name | Icon | Color | Templates |
-|---|------|------|-------|-----------|
-| 1 | Bank & Finance | `landmark` | `#3B82F6` | 6 |
-| 2 | Farm & Agriculture | `sprout` | `#22C55E` | 6 |
-| 3 | Business | `briefcase` | `#8B5CF6` | 6 |
-| 4 | Work & Administrative | `building-2` | `#6366F1` | 6 |
-| 5 | Personal | `user` | `#14B8A6` | 6 |
-| 6 | Family & Home | `home` | `#F59E0B` | 6 |
-| 7 | Kids | `baby` | `#EC4899` | 6 |
-| 8 | Education & Learning | `graduation-cap` | `#06B6D4` | 6 |
-
-48 templates total (6 per category). Re-seeded by `seedDatabase()` when categories are empty (only categories + templates — never demo tasks).
+| # | Name | Icon | Color |
+|---|---|---|---|
+| 1 | Bank & Finance | `landmark` | `#3B82F6` |
+| 2 | Farm & Agriculture | `sprout` | `#22C55E` |
+| 3 | Business | `briefcase` | `#8B5CF6` |
+| 4 | Work & Administrative | `building-2` | `#6366F1` |
+| 5 | Personal | `user` | `#14B8A6` |
+| 6 | Family & Home | `home` | `#F59E0B` |
+| 7 | Kids | `baby` | `#EC4899` |
+| 8 | Education & Learning | `graduation-cap` | `#06B6D4` |
 
 ---
 
-## Internationalization
+## 11. Internationalization
 
-| Code | Display | Kitchen sync status |
-|------|---------|---------------------|
+| Code | Display | Status |
+|---|---|---|
 | `en` | English | Default, fallback |
 | `mr` | मराठी | Full |
 | `hi` | हिंदी | Full |
 
-- ~130 keys per language covering dashboard, tasks, modals, settings, sync
-- `t(key)` → current lang, falls back to `en`, then raw key
-- `setLang(code)` swaps + refreshes `document.documentElement.lang`
-- `translateStatic()` re-renders `[data-i18n]` elements
-- Persisted via `todoMeva_lang`; read on boot with `initLang()`
-- **2026-09-13 natural-language rewrite:** mr + hi blocks written in everyday phrasing — due prefix `मुदत` (mr) / recurrence phrases like `फिर होगा` (hi), live repeat labels (`रोज़` / `हर हफ़्ते`), Marathi `ॲप` spelling. Reset label = `रीसेट` in both. Verified live in a Marathi-profile browser.
+- ~130 keys per language. `t(key)` → current lang → fallback `en` → raw key.
+- `setLang(code)` swaps dictionary + `document.documentElement.lang`; `translateStatic()` re-renders `[data-i18n]`; `initLang()` reads `todoMeva_lang` on boot.
+- mr/hi blocks rewritten as natural everyday language (due prefix `मुदत`, repeat phrases like `फिर होगा`, `रोज़`/`हर हफ़्ते`, Marathi `ॲप`); reset label `रीसेट` in both.
 
 ---
 
-## Features
+## 12. Design system
 
-### App Shell
-- Landing page with hero, info cards, tagline, footer
-- App shell with sidebar + main panel + FAB
-- Responsive: desktop (side-by-side), tablet (sidebar overlay), mobile (full-screen)
-- Onboarding card on first visit: name (required) + optional contact, no login; Save or Skip (toggleable via prefs)
+Default palette (Orange).
+
+| Role | Light | Dark | Usage |
+|---|---|---|---|
+| Background | `#f7f3ee` | `#191715` | Body |
+| Surface | `#ffffff` | `#24211e` | Cards, sidebar, modals |
+| Soft surface | `#fff8ef` | `#2d2823` | Soft backgrounds |
+| Text | `#2d2a24` | `#fff7ed` | Main text |
+| Muted | `#7c7164` | `#c8b8a7` | Secondary text |
+| Border | `#e6d9ca` | `#463c33` | Borders |
+| Accent | `#f97316` | `#fb923c` | Buttons, active |
+| Accent strong | `#ea580c` | `#f97316` | Hover |
+| Success / Warning / Danger | `#16a34a` / `#d97706` / `#dc2626` | same | Priority + status |
+
+Brand palettes: `[data-brand="blue"]` and `[data-brand="green"]` override accent tokens via CSS custom properties (both themes); default is orange. Chips in Settings → Appearance.
+
+Tokens: card radius 22px, task cards 18px, buttons/badges 999px; shadow `0 18px 45px rgba(67, 48, 33, 0.12)`; font Inter/system-ui. Sync status dot uses `syncPulse`. Settings panel width == dashboard `.main-panel` (`min(1180px, calc(100% - 32px))`); the old 860px cap on `.settings-grid-full` is gone. Full reference: `assets/palette.md`.
+
+---
+
+## 13. Features
+
+### App shell
+- Landing page (hero, info cards, tagline, footer) → app shell (sidebar + main panel + FAB).
+- Responsive: desktop side-by-side, tablet overlay sidebar, mobile full-screen.
+- Onboarding card on first visit: name (required) + optional contact, no login; Save or Skip (toggleable via prefs).
 
 ### Views (4 + Settings)
-1. **Dashboard** — Stats (overdue/open/completed), quick create form, overdue/today/open task sections
-2. **Upcoming** — Chronological list of future dated tasks (30 days)
-3. **Category** — Filter tasks by category (click from sidebar)
-4. **Priority Matrix** — Columns for high/medium/low/pending priority
-5. **Settings** — Single scrolling page, 8 section cards (Account, Appearance/App Color, Language, Notifications & Popups, Multi-Device Sync, Data, Danger Zone, About)
+1. **Dashboard** — stats, quick-create form, overdue/today/open sections
+2. **Upcoming** — future dated tasks, 30 days
+3. **Category** — tasks filtered by category
+4. **Priority Matrix** — high/medium/low/pending columns
+5. **Settings** — single scrolling page, 8 section cards (Account, Appearance, Language, Notifications & Popups, Multi-Device Sync, Data, Danger Zone, About) + Broadcasts status row
 
-### Task Management
-- Quick Add (Ctrl+K or FAB): two-step (category grid → template chips + form)
-- Task CRUD: create, read, update, delete with confirmation
-- Status cycling: todo → in_progress → completed → todo
-- Status button color changes per state
-- Recurring tasks auto-generate next instance on completion
-
-### Data Features
-- Export full JSON backup (categories + templates + tasks + activities + exportedAt)
-- Import JSON backup (replaces all data in one transaction)
-- Local date string helpers (avoids timezone issues)
-- Activity tracking for all task operations
+### Tasks
+- Quick Add (Ctrl+K or FAB): category grid → template chips → two-step form
+- CRUD with delete confirmation; status cycling `todo → in_progress → completed → todo`
+- Recurring tasks auto-generate next instance on completion; archive/focus lifecycle
+- Petka: priority/recurrence/reminder custom dropdowns + custom calendar date picker (native `date` inputs)
 
 ### Notifications
-- Browser Web Notifications
-- **Topbar bell icon** with unread-count badge opening a dropdown panel grouping tasks into Overdue / Today / Due soon, with a footer Enable-permission button
-- Settings → Notifications & Popups shows a **live permission status row** (Enabled / Blocked / Off / Not supported)
-- Enable flow: `requestNotificationPermission()` returns the resulting state (`unsupported`/`granted`/`denied`/`default`); the `Enable` button renders only when permission is requestable (`Notification.permission === 'default'`); after requesting, the settings view re-renders so the status updates immediately
-- Periodic checker every 30 seconds; smart firing (each reminder fires once)
-- Configurable via `todoMeva_notify_prefs.reminders` / `.onboarding`
+- **Android APK:** Capacitor LocalNotifications (native `schedule`, `ic_stat_notify` icon, `#3b82f6` color)
+- **Web:** Web Notifications API
+- Topbar bell with unread badge → dropdown panel grouping Overdue / Today / Due soon + Enable button
+- Settings shows live permission status (Enabled / Blocked / Off / Not supported); Enable button renders only when requestable
+- 30s checker, one fire per reminder, prefs via `todoMeva_notify_prefs`
 
-### Theme, Brand & Language
-- Light/Dark toggle with CSS custom properties, persisted in `todoMeva_theme`
-- 3 brand palettes (Orange/Blue/Emerald), persisted in `todoMeva_brand`
-- Theme + brand applied early in `<head>` to prevent flash
-- Trilingual UI via `todoMeva_lang`
+### Theme, brand & language
+- Light/dark + 3 palettes + 3 languages, all applied pre-paint (`<head>` script), persisted.
 
-### Settings — 8 Sections
-1. **Account** — profile name/email/contact (contact optional) edit form (`todoMeva_profile`)
-2. **Appearance / App Color** — dark mode + palette chips (segmented)
-3. **Language** — en / mr / hi segmented picker
-4. **Notifications & Popups** — reminders toggle, onboarding popups toggle, live permission status row with working Enable flow
-5. **Multi-Device Sync** — optional connect form (Supabase URL + key), sync now, disconnect, live status dot (disconnected/connected/syncing/error), embedded schema SQL with copy button
-6. **Data** — export / import
-7. **Danger Zone** — Clear all data (must type DELETE), Reset preferences — rows match the global settings rhythm (12px padding, 8px gap)
-8. **About** — version info + Open Landing Page
-
-### Onboarding
-- First-launch modal (once, gated by `todoMeva_onboarded`) with flat profile-style card
-- Asks name (required) + contact (optional, prefilled from `todoMeva_profile.contact`); Save or Skip
-- No password/account creation; data stays local (`todoMeva_profile`)
-
-### Multi-Device Sync (opt-in)
-- Optional — by default everything stays on this device; connect your own Supabase project to share across devices
+### Multi-device sync (opt-in)
+- Default: everything stays local. Connect your own Supabase project to share.
 - Config validated against `^https://([a-zA-Z0-9-]+\.)+supabase\.co$`
-- Push: debounced upsert of all local rows as `entity:<uuid>` docs (`onConflict: 'id'`)
-- Pull: select ordered by `updated_at`, applies remote changes, remaps numeric IDs, handles `deleted` tombstones
-- Realtime: channel `todomeva-sync` (postgres_changes) triggers re-apply
-- Fallback: 30s poll + reconnect on `online` event
-- Status: `disconnected | connected | syncing | error` with last-sync timestamp; errors persisted and re-rendered (never wiped by refresh)
-- Disconnect clears + removes `todoMeva_sync`; App code stays stable with no config
+- Push: debounced upsert of local rows as `entity:<uuid>` (`onConflict: 'id'`); Pull: ordered by `updated_at`, remaps numeric IDs, applies tombstones
+- Realtime channel `todomeva-sync` + 30s poll + reconnect on `online`
+- Status `disconnected | connected | syncing | error` with last-sync time, persisted across refresh
+- Disconnect clears config; app stays stable with none
+
+### Broadcast & banner (jsonbin + CF edge proxy)
+- App polls `https://todomeva.pages.dev/api/announcements?type=broadcast|banner` every 60s; CF Pages Function edge-caches one copy per 10-min TTL, so jsonbin load scales with time, not users
+- Broadcast pills (stack, dismissible, `pinned`, `expires`, `link`, `targetId`) + banner modal (7s close countdown, `startDate`/`expires`, `href`, `image`)
+- Direct jsonbin fallback if the proxy is unreachable; `cache: 'no-store'` on polls
+- Bin ids XOR+base64-obfuscated in `js/broadcast.js`; server-side in `functions/api/announcements.js` (overridable via Pages env vars)
+- Device-targeting via `todoMeva_deviceId` (shown in Settings); dismissed ids per device
+- Full editing guide: `docs/BROADCAST-GUIDE.md`
 
 ---
 
-## Mobile UI/UX (≤ 620px)
+## 14. Mobile UI/UX (≤ 620px)
 
-- **Sidebar**: Full-screen, slides from left, dark backdrop, brand separated with border
-- **Topbar**: Wraps, eyebrow hidden, action buttons collapse
-- **Task cards**: Badge moves below title, compact padding
-- **Modals**: Bottom sheet style (slide up, rounded top corners)
-- **Quick create**: Single column, full-width
-- **Category grid**: Single column, horizontal cards (icon + name)
-- **Info cards**: Compact grid layout (icon left, title + description right)
-- **FAB**: Centered at bottom thumb-reach
-- **Tagline**: Full-width wrapping pill
-- **Footer**: Stacked vertically, credit in middle
-- **Stats**: 2-column grid
-- **Landing hero**: Compact headline, full-width CTA, smaller preview
+Full-screen slide-in sidebar with backdrop; topbar wraps (eyebrow hidden); badge below task title; bottom-sheet modals; single-column quick create; compact horizontal category cards; compact info-card grid; centered bottom FAB; full-width tagline pill; stacked footer; 2-column stats; compact landing hero.
 
 ---
 
-## All Design Decisions (Chronological)
+## 15. Android / Capacitor build plan
 
-| Step | Choice | Selected Option |
-|------|--------|----------------|
-| 1 | App foundation | Vanilla SPA (no build) |
-| 2 | File structure | Documented module layout |
-| 3 | Styling approach | Tailwind CDN + local CSS fallback → later switched to pure local CSS |
-| 4 | Storage | Dexie IndexedDB |
-| 5 | First scope | Full documented app |
-| 6 | Build order | Data → UI → Features |
-| 7 | Dev server | Python http.server |
-| 8 | Dependencies | Vendored local browser builds |
-| 9 | Vendoring method | Download browser builds |
-| 10 | Flat UI palette | Warm productivity |
-| 11 | Reminder UI | Topbar button |
-| 12 | Run check | Started server on port 8400 |
-| — | Logo & favicon | Minimal checklist + checkmark SVG |
-| — | Design direction | Switched from glassmorphism to warm flat UI |
-| — | Mobile UI | Rebuilt for compact view: bottom-sheet modals, centered FAB, compact info cards, stacked footer |
-| — | Landing page | Short hero, 4 info cards, tagline, footer |
-| 13 | DB upgrades | v2 → v3 adds `uuid` to all 4 tables (sync enables stable identity) |
-| 14 | Settings | Full 8-section Settings page |
-| 15 | i18n | Trilingual from day one (en/mr/hi) via `data-i18n` + `t()` |
-| 16 | Brand palettes | Accent swaps via `[data-brand]` CSS overrides (Orange/Blue/Emerald) |
-| 17 | Sync model | Bring-your-own Supabase — URL + anon key pasted at runtime |
-| 18 | Sync data shape | `sync_docs` keyed `entity:<uuid>`, upsert push, tombstone deletes, realtime + polling |
-| 19 | Sync auth posture | Unauthenticated anon access accepted (user-owned single-person project) |
-| 20 | Notification UI | Topbar bell + unread badge + dropdown panel (replaces bare topbar request button) |
-| 21 | Notification enable | Enable button only when requestable; settings re-renders to live status after request |
-| 22 | Settings width | Removed 860px cap — Settings matches dashboard `.main-panel` width |
-| 23 | i18n quality | mr/hi rewritten as natural everyday language (due prefix, repeat phrases, ॲप spelling) |
-| 24 | Danger Zone rhythm | Wrapper `#danger-main` → grid, so the two danger rows get the same 8px gap / 12px padding as every other settings row |
-| 25 | Onboarding & contact | First-launch onboarding card (name required + optional contact, no login) saves `todoMeva_profile.contact`; Settings Account form gains contact field |
+- `capacitor.config.json`: `appId com.kuldeep.todomeva`, `appName "Todo Meva"`, `webDir www`, `LocalNotifications.smallIcon = ic_stat_notify`, `iconColor #3b82f6`, `allowMixedContent false`.
+- `android/app/build.gradle`: debug signing from committed `android/app/debug.keystore` (standard `android`/`androiddebugkey`, non-secret — mirrors the Money Meva pattern); **release block deliberately unsigned** (no hardcoded credentials, no secrets in repo); `minifyEnabled false`.
+- Release keystore `todomeva-release.keystore` is gitignored and lives only locally.
+- Version flow: `VERSION` → `scripts/update-android-version.cjs` → `build.gradle` (`versionCode`/`versionName`).
+- The web app is fully self-contained in `www/` — no build secrets, sync config is user-entered localStorage, so the CI APK build needs **no repository secrets**.
+- Local build verified: `npm run build` → `npx cap sync android` → `update-android-version` → `./gradlew assembleDebug` (JDK 21, ANDROID_HOME set). APK ≈4.4 MB, signed with Android debug cert, includes all 3 notification permissions + `ic_stat_notify`.
 
 ---
 
-## Server & Access
+## 16. CI/CD workflows (`.github/workflows/`)
 
-- **URL:** `http://127.0.0.1:8400/index.html`
-- **Command:** `start.bat` (starts hidden Python `http.server` on 8400); stop with `stop-server.bat`
-- **Refresh:** `Ctrl+F5` (hard refresh after changes)
+| Workflow | Triggers | What it does | Secrets |
+|---|---|---|---|
+| `build-apk.yml` ("Build Android APK") | push to `main` (paths: VERSION, android/**, js/**, css/**, assets/**, vendor/**, index.html, package.json) + manual (version_type choice) | `npm ci` → optional bump-version → `npm run build` → `cap sync android` → update android version → `assembleDebug` → upload `Todomeva-APK` artifact | none |
+| `pages.yml` ("Deploy to GitHub Pages") | push to `main` + manual | stages `index.html` + `css/js/assets/vendor` into `public/`, `upload-pages-artifact@v5`, `deploy-pages@v5` | none (Pages auto) |
+| `deploy-cloudflare.yml` ("Deploy to Cloudflare Pages") | push to `main` + manual | `wrangler pages deploy .` on project `todomeva` (creates if missing), serves `functions/` → announcements proxy | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (skipped/no-op until set) |
 
 ---
 
-## Verification
+## 17. Server & access
+
+- Local dev: `start.bat` (hidden Python `http.server` on **8400**); stop with `stop-server.bat`.
+- Open `http://127.0.0.1:8400/index.html`; hard refresh with `Ctrl+F5` after changes.
+- Deployed web: https://kuldeep7ke.github.io/todomeva/ (GH Pages) · https://todomeva.pages.dev (CF, incl. `/api/announcements`).
+
+---
+
+## 18. Verification
 
 ```powershell
-node --check js/app.js
-node --check js/components.js
-node --check js/views.js
-node --check js/db.js
-node --check js/seed.js
-node --check js/reminder.js
-node --check js/recurrence.js
-node --check js/i18n.js
-node --check js/prefs.js
-node --check js/account.js
-node --check js/sync.js
+# syntax checks
+node --check js/app.js js/components.js js/views.js js/db.js js/seed.js js/reminder.js
+node --check js/recurrence.js js/i18n.js js/prefs.js js/account.js js/sync.js js/broadcast.js
+
+# web build + android sync
+npm run build
+npx cap sync android
+node scripts/update-android-version.cjs
+
+# android apk (from repo root; JDK 21 + ANDROID_HOME required)
+./android/gradlew -p android assembleDebug
 ```
 
 ### Quick browser checks
-1. Launch App renders dashboard, not a blank shell
-2. Sidebar category counts show
-3. Light/Dark toggle persists after refresh
-4. Ctrl+K or FAB opens Quick Add; X and Cancel close it
-5. Dashboard quick create adds a task
-6. Task card click opens edit modal
-7. Status checkbox cycles task state
-8. Export downloads JSON
-9. Settings renders 8 sections; language + palette switches persist after refresh
-10. Sync error path: invalid URL shows persistent validation message; unreachable host surfaces fetch error without breaking the Settings view
-11. Settings top edge aligns with dashboard (same `.main-panel` width)
-12. Danger Zone rows: 12px padding each + 8px gap between them (same rhythm as other cards)
-13. Notifications: granted permission → status row reads "Status: Enabled" (not "Off + Enable"); Enable button only when permission is requestable
+1. Launch renders dashboard, not a blank shell; 2. sidebar category counts show; 3. theme/brand/lang persist after refresh; 4. Ctrl+K / FAB opens Quick Add, X and Cancel close it; 5. dashboard quick create adds a task; 6. task card opens edit modal; 7. status checkbox cycles state; 8. export downloads JSON; 9. Settings renders 8 sections + Broadcasts status; 10. invalid sync URL shows persistent validation message; unreachable host surfaces a fetch error without breaking Settings; 11. Settings top edge aligns with dashboard (same `.main-panel` width); 12. Danger Zone rows: 12px padding + 8px gap; 13. notifications: granted → status row reads Enabled (not "Off + Enable"); Enable button only when requestable.
+
+### Android smoke checks
+1. `npm run build && npx cap sync android` then `assembleDebug` succeeds locally and in CI; 2. APK shows app name "Todo Meva"; 3. reminders schedule natively (Capacitor) and fire once; 4. sync config + broadcast pills work from the APK WebView (CORS `*` on the proxy).
 
 ---
 
-## Known Issues / Future Work
+## 19. Known issues / future work
 
-- [ ] Category deletion does not reassign existing tasks (orphaned categoryId)
-- [ ] Custom recurrence with specific days of week not in UI
+- [ ] Category deletion does not reassign existing tasks (orphaned `categoryId`)
+- [ ] Custom recurrence with specific days of the week not in UI
 - [ ] No drag-and-drop reordering of tasks
 - [ ] No task search / full-text search
-- [ ] Sync uses unauthenticated anon access — fine for a personal project, switch to Supabase Auth for shared/multi-user later
-- [ ] Third-party CDN (Google Fonts) can fail offline
+- [ ] Sync uses unauthenticated anon access — fine for personal use; add Supabase Auth for shared/multi-user later
+- [ ] Google Fonts CDN can fail offline
+- [ ] APK is debug-signed only; release signing (gitignored keystore) not wired into CI
+- [ ] Nothing for iOS yet (Capacitor would need a Mac + Xcode)
 
 ---
 
-## Git
+## 20. Design decisions (chronological)
 
-- **Remote:** `https://github.com/kuldeep7ke/todomeva.git` — **Branch:** `main`
-- **HEAD:** `c98a2c3` "Rebuild Todo Meva with warm flat UI, offline-first Dexie storage, 8 categories, 48 templates, task CRUD, recurring tasks, reminders, import/export, responsive mobile layout"
-- **Uncommitted:**
-  - Modified: `index.html`, `css/style.css`, `js/app.js`, `js/components.js`, `js/db.js`, `js/recurrence.js`, `js/reminder.js`, `js/views.js`
-  - Untracked (post-HEAD modules): `js/i18n.js`, `js/prefs.js`, `js/account.js`, `js/sync.js`, `supabase/schema.sql`, `vendor/supabase.min.js`
-  - Cleanup: `.playwright-mcp/`, root screenshot `*.png` files (dev artifacts)
+| Step | Choice | Selected option |
+|---|---|---|
+| 1 | Foundation | Vanilla SPA, no build step |
+| 2 | Structure | Documented ES-module layout |
+| 3 | Styling | Warm flat UI (replaced glassmorphism) |
+| 4 | Storage | Dexie IndexedDB (4 tables) |
+| 5–6 | Scope / order | Full documented app; Data → UI → Features |
+| 7 | Dev server | Python `http.server` :8400 |
+| 8–9 | Dependencies | Vendored local browser builds |
+| 10 | Palette | Warm productivity (orange accent) |
+| 11–12 | Reminder UI / run check | Topbar bell; verified on :8400 |
+| 13 | DB upgrades | v2 → v3 adds `uuid` to all tables (stable identity for sync) |
+| 14 | Settings | Full 8-section single page |
+| 15 | i18n | Trilingual from day one (`data-i18n` + `t()`) |
+| 16 | Brand palettes | Accent swaps via `[data-brand]` CSS overrides |
+| 17–19 | Sync | Bring-your-own Supabase; `sync_docs` keyed `entity:<uuid>`; anon access accepted (user-owned project) |
+| 20–21 | Notification UI/enable | Topbar bell + badge + dropdown panel; Enable button only when requestable, settings re-renders to live status |
+| 22–24 | Settings width / i18n quality / Danger Zone | Panel-width parity, natural mr/hi phrasing, grid rhythm for danger rows |
+| 25 | Onboarding & contact | First-launch card (name required + optional contact), `todoMeva_profile.contact`; Account form gains contact |
+| 26 | Broadcasts | jsonbin bins behind a Cloudflare Pages edge-cached proxy (`/api/announcements`), absolute-URL constant, direct-jsonbin fallback |
+| 27 | Android | Capacitor 8 wrapper; debug keystore committed; release intentionally unsigned (no secrets in repo); LocalNotifications plugin with small icon + color |
+| 28 | Android versioning | Single `VERSION` file drives `versionCode`/`versionName` via script |
+| 29 | CI/CD | GitHub Actions: APK artifact (no secrets), GH Pages (static copy), CF Pages (whole repo + functions) |
+| 30 | Sync parity | Broadcast `targetId` per-device targeting via `todoMeva_deviceId` |
 
 ---
 
-## ToDo / Handoff Notes
+## 21. Git
 
-- **Commit pending:** the working tree contains the i18n/prefs/account/sync modules plus all session fixes (notif enable flow, URL-safe cache versions, settings width + Danger Zone). A commit should split cleanup of `.playwright-mcp/` + root PNGs.
-- **Live sync test pending:** create a TodoMeva Supabase project, run `supabase/schema.sql` in the SQL Editor, paste Project URL + anon key into Settings → Multi-Device Sync, then sync between two devices. (Config validation, failure paths, and wipe/Danger-Zone flows already verified locally.)
+- Remote: `https://github.com/kuldeep7ke/todomeva.git` — Branch: `main`
+- HEAD: `4798746` "feat: adopt MoneyMeva build plan — Android APK workflow + Capacitor LocalNotifications"
+- Working tree clean. Repo public; no secrets committed (`todomeva-release.keystore` gitignored; deploy secrets live only in GH settings).
+
+---
+
+## 22. Handoff notes
+
+- Docs restructured 2026-09-15: new `README.md`, rewritten `MEMORY_CAPSULE.md` + `FROM_SCRATCH.md`; guides verified against code.
+- Broadcast/banner content is edited on **jsonbin.io** (no deploy) — see `docs/BROADCAST-GUIDE.md`. Announcing a release: bump the broadcast `id` (e.g. `...-v2`) so dismissed users see it.
+- To publish a new version: bump `VERSION` (scripts), `npm run build`, commit, push — CI builds APK + deploys both sites automatically. Optionally trigger the APK workflow manually with a version_type for a standalone bump.

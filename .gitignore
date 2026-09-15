@@ -12,3 +12,9 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Capacitor staging build output
+www/
+
+# Release keystore (kept local only; never commit)
+todomeva-release.keystore

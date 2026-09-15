@@ -1,0 +1,14 @@
+{
+  "appId": "com.kuldeep.todomeva",
+  "appName": "Todo Meva",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#3b82f6"
+    }
+  }
+}

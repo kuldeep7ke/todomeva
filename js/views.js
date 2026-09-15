@@ -5,6 +5,7 @@ import { getLang, getLangs } from './i18n.js?v=11';
 import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=4';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
+import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=7';
 import { getLastUrl, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=8';
 
 export async function renderDashboard() {
@@ -136,10 +137,9 @@ export async function renderSettings() {
   const content = document.querySelector('#view-content');
   const isDark = document.documentElement.dataset.theme === 'dark';
   const brand = document.documentElement.dataset.brand || 'orange';
-  const notificationsAvailable = 'Notification' in window;
-  const notifStateKey = notificationsAvailable
-    ? (Notification.permission === 'granted' ? 's_notif_status_enabled' : Notification.permission === 'denied' ? 's_notif_status_blocked' : 's_notif_status_off')
-    : 's_notif_status_unsupported';
+  const notificationsAvailable = isNotificationsSupported();
+  const notifPerm = notificationsAvailable ? await getNotificationPermission() : 'unsupported';
+  const notifStateKey = notifPerm === 'granted' ? 's_notif_status_enabled' : notifPerm === 'denied' ? 's_notif_status_blocked' : notifPerm === 'unsupported' ? 's_notif_status_unsupported' : 's_notif_status_off';
   const notifyPrefs = getNotifyPrefs();
   const profile = getProfile();
   const sync = getSyncStatus();
@@ -196,7 +196,7 @@ export async function renderSettings() {
       ${settingsCardIcon('s_notifications', 's_notifications_desc', 'blue', icon('bell-ring'), `
         ${settingsRow('bell', 's_notif_reminders', 's_notif_reminders_desc', `<button class="setting-switch ${notifyPrefs.reminders ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.reminders}" aria-label="${t('s_notif_reminders')}" data-settings-action="pref-reminders"></button>`)}
         ${settingsRow('message-circle', 's_notif_popups', 's_notif_popups_desc', `<button class="setting-switch ${notifyPrefs.onboarding ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.onboarding}" aria-label="${t('s_notif_popups')}" data-settings-action="pref-onboarding"></button>`)}
-        ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notificationsAvailable && Notification.permission === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
+        ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notifPerm === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
       `)}
       ${settingsCardIcon('s_broadcasts', 's_broadcasts_desc', 'purple', icon('megaphone'), `
         <div class="settings-row">
@@ -370,7 +370,7 @@ export async function renderNotificationsPanel() {
   ]
     .map((group) => ({ ...group, items: group.items.slice(0, 20) }))
     .filter((group) => group.items.length > 0);
-  const canNotif = 'Notification' in window && Notification.permission === 'default';
+  const canNotif = isNotificationsSupported() && (await getNotificationPermission()) === 'default';
   const button = document.querySelector('#notif-btn');
   if (button) button.setAttribute('aria-label', t('notif_title'));
   content.innerHTML = `

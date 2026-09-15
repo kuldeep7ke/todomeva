@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Todo Meva</string>
+    <string name="title_activity_main">Todo Meva</string>
+    <string name="package_name">com.kuldeep.todomeva</string>
+    <string name="custom_url_scheme">com.kuldeep.todomeva</string>
+</resources>

@@ -1,0 +1,23 @@
+{
+  "name": "todomeva",
+  "version": "1.0.0.0",
+  "private": true,
+  "description": "Todo Meva - offline-first todo manager with reminders, sync and broadcasts",
+  "scripts": {
+    "build": "node scripts/build-web.cjs",
+    "version:patch": "node scripts/bump-version.cjs patch",
+    "version:minor": "node scripts/bump-version.cjs minor",
+    "version:major": "node scripts/bump-version.cjs major",
+    "cap:sync": "npx cap sync android",
+    "cap:copy": "npx cap copy android",
+    "cap:build": "npx cap build android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/local-notifications": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

@@ -1,0 +1,75 @@
+# Build Android APK. ToDoMeva is a static web app (no build secrets needed).
+# Sync config is user-entered localStorage, not baked into the APK.
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VERSION'
+      - 'android/**'
+      - 'js/**'
+      - 'css/**'
+      - 'assets/**'
+      - 'vendor/**'
+      - 'index.html'
+      - 'package.json'
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - run: npm ci
+
+      - name: Bump version
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/bump-version.cjs ${{ github.event.inputs.version_type }}
+
+      - name: Stage web assets
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Sync Android version
+        run: node scripts/update-android-version.cjs
+
+      - name: Build debug APK
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: Todomeva-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          compression-level: 0

@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=12';
+import { t } from './i18n.js?v=14';
 
 export function isDialogOpen() {
   const overlay = document.querySelector('#app-dialog');

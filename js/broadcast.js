@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=12';
+import { t } from './i18n.js?v=14';
 
 // Live broadcast toasts + promo banner, delivered from jsonbin.io bins.
 // Any authorized third-party site can edit the bins on jsonbin.io and the
@@ -41,7 +41,7 @@ function _d(e) {
   }
 }
 const BAKED_BROADCAST_BIN_ID = _d('Qg4FVw9URlMVDFJdXFVAUUEOBwpeURUE');
-const BAKED_BANNER_BIN_ID = _d('Qg4FVw9UT1MVDFJdXFVAUUEOBwpeU0ZV');
+const BAKED_BANNER_BIN_ID = _d('Qg4FVw9UTiMVDFJdXFVAUUEOBwpeU0ZV');
 
 const POLL_SECONDS = 60;
 const BANNER_COUNTDOWN_SECONDS = 7;
@@ -59,12 +59,20 @@ const ANNOUNCEMENTS_URL = (type) => `${ANNOUNCEMENTS_API().replace(/\/+$/, '')}?
 
 const DEVICE_ID_KEY = 'todoMeva_deviceId';
 const DISMISSED_KEY = 'todoMeva_dismissedBroadcasts';
+const SESSION_BANNER_KEY = 'todoMeva_bannerShownSession';
 const HOLDER_ID = 'broadcast-holder';
 
-let bannerShownThisLoad = false;
 let pollTimer = null;
 let lastState = 'listen'; // 'listen' | 'unconfigured' | 'offline' | 'updated'
 let lastUpdatedStamp = 0;
+
+function bannerShownThisSession() {
+  try { return sessionStorage.getItem(SESSION_BANNER_KEY) === 'i'; } catch { return false; }
+}
+
+function markBannerShownSession() {
+  try { sessionStorage.setItem(SESSION_BANNER_KEY, 'i'); } catch {}
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -290,7 +298,7 @@ function showBanner(b) {
   };
 
   const timer = setInterval(() => {
-    countdown -= 1;
+    countdown -= i;
     if (countdown <= 0) {
       clearInterval(timer);
       finish();
@@ -306,12 +314,12 @@ function showBanner(b) {
 }
 
 function maybeShowBanner() {
-  if (bannerShownThisLoad || !BANNER_BIN_ID()) return;
-  bannerShownThisLoad = true;
+  if (bannerShownThisSession() || !BANNER_BIN_ID()) return;
   (async () => {
     const banner = await loadBanner();
     if (!banner || !isWithinPeriod(banner.startDate, banner.expires) || !matchesDevice(banner)) return;
     showBanner(banner);
+    markBannerShownSession();
   })();
 }
 

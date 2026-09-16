@@ -1,14 +1,14 @@
 export const PRIORITY_CONFIG = {
   high: { label: 'High', className: 'high' },
   medium: { label: 'Medium', className: 'medium' },
-  low: { label: 'Low', className: 'low' },
-  pending: { label: 'Pending', className: 'pending' }
+  low: { label: 'Low', className: 'low' }
 };
 
 export const STATUS_CONFIG = {
-  todo: { label: 'Todo' },
-  in_progress: { label: 'In progress' },
-  completed: { label: 'Completed' }
+  not_started: { label: 'Start' },
+  in_progress: { label: 'Process' },
+  done: { label: 'Done' },
+  pending: { label: 'Pending' }
 };
 
 export const SEED_CATEGORIES = [

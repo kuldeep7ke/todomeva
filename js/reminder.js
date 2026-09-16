@@ -1,5 +1,5 @@
-﻿import { getTasks, updateTask } from './db.js?v=7';
-import { isPrefEnabled } from './prefs.js?v=4';
+﻿import { getTasks, updateTask } from './db.js?v=8';
+import { isPrefEnabled } from './prefs.js?v=5';
 
 const CAPACITOR = () => (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ? window.Capacitor : null;
 const LOCAL_NOTIF = () => { const cap = CAPACITOR(); return cap && cap.Plugins && cap.Plugins.LocalNotifications ? cap.Plugins.LocalNotifications : null; };
@@ -50,7 +50,7 @@ export async function checkAndFireReminders() {
   const now = Date.now();
   const tasks = await getTasks();
   for (const task of tasks) {
-    if (task.status === 'completed' || task.priority === 'pending' || task.deletedAt || !task.dueDate || !task.reminders?.length) continue;
+    if (task.status === 'done' || task.status === 'pending' || task.deletedAt || !task.dueDate || !task.reminders?.length) continue;
     const due = new Date(task.dueDate + 'T09:00:00').getTime();
     const reminders = task.reminders.map((reminder, idx) => {
       if (reminder.fired) return reminder;

@@ -1,45 +1,104 @@
-import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
-import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=13';
-import { t } from './i18n.js?v=12';
-import { getLang, getLangs } from './i18n.js?v=12';
-import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=5';
-import { getNotifyPrefs } from './prefs.js?v=4';
+import { getCategories, getTasks, getSpecialDays, localDateStr } from './db.js?v=8';
+import { attachTaskCardEvents, bindCategoryPickers, icon, openQuickAdd, renderTaskCard, renderSpecialDayCard, refreshIcons } from './components.js?v=14';
+import { getLang, getLangs, t } from './i18n.js?v=15';
+import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=6';
+import { getNotifyPrefs } from './prefs.js?v=5';
 import { getProfile } from './account.js?v=4';
-import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=7';
-import { getLastUrl, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=9';
+import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=8';
+import { getLastUrl, getSavedSyncLink, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=11';
+import { TIME_WINDOWS, bucketByWindow } from './windows.js?v=1';
+
+function isOpenTask(task) {
+  return task.status !== 'done' && task.status !== 'pending' && !task.deletedAt;
+}
 
 export async function renderDashboard() {
   const { categories, tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt);
+  const openTasks = tasks.filter(isOpenTask);
   const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today);
   const dueToday = openTasks.filter((task) => task.dueDate === today);
-  const completed = tasks.filter((task) => task.status === 'completed' && !task.deletedAt);
+  const completed = tasks.filter((task) => task.status === 'done' && !task.deletedAt);
   const content = document.querySelector('#view-content');
   content.innerHTML = `
     <section class="grid stats-grid">
       ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><form id="dashboard-create" class="quick-create"><input class="field" name="title" placeholder="${t('placeholder_add_task')}" required />${renderCategoryPicker(0, categories)}${renderPicker('priority', t('priority_medium'), priorityOptions(), 'medium')}<button class="btn btn-primary">${t('add')}</button></form></section>
+    <section class="card"><h3>${t('quick_create')}</h3><div class="quick-create"><button class="btn btn-primary" data-open-quick-add>${t('add_task_fab')}</button><div class="quick-cats">${categories.map((c) => `<button class="quick-cat-pill" type="button" data-open-quick-cat="${c.id}" title="${escapeHtml(c.name)}"><span class="category-dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</button>`).join('')}</div><span class="muted">${t('quick_add_hint')}</span></div></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}
   `;
-  document.querySelector('#dashboard-create').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await addTask({ title: form.get('title'), categoryId: form.get('categoryId'), priority: form.get('priority') });
-    window.refreshCurrentView();
-  });
+  content.querySelector('[data-open-quick-add]').addEventListener('click', () => openQuickAdd());
+  content.querySelectorAll('[data-open-quick-cat]').forEach((pill) => pill.addEventListener('click', () => openQuickAdd(pill.dataset.openQuickCat)));
   attachTaskCardEvents(content);
   bindCategoryPickers(content);
   refreshIcons();
 }
 
+export async function renderTime(activeWindow = 'today') {
+  const { categories, tasks, categoryMap } = await loadViewData();
+  const specialDays = await getSpecialDays();
+  const content = document.querySelector('#view-content');
+  const windowLabel = t(`window_${activeWindow}`) || activeWindow;
+
+  const openTasks = tasks.filter((task) => task.status !== 'done' && !task.deletedAt);
+  const doneTasks = tasks.filter((task) => task.status === 'done' && !task.deletedAt);
+  const keyFor = (task) => task.dueDate || '';
+  const buckets = bucketByWindow(openTasks, keyFor);
+  const group = buckets[activeWindow] || [];
+  const todaySpecial = [];
+  if (activeWindow === 'today') {
+    const today = localDateStr();
+    const monthDay = today.slice(5);
+    for (const sd of specialDays) {
+      if (sd.deletedAt) continue;
+      const sdDate = sd.date || '';
+      if (!sdDate) continue;
+      if (sd.recurring === 'yearly' ? sdDate.slice(5) === monthDay : sdDate === today) todaySpecial.push(sd);
+    }
+  }
+  const header = `${t('time')} · ${windowLabel}`;
+  content.innerHTML = `
+    ${windowTabs(activeWindow, false)}
+    ${activeWindow === 'today' ? `<section class="card">${todaySpecial.length ? `<div class="section-header"><h3>${t('special_days_today')}<span class="muted count-inline">&nbsp;&middot;&nbsp;${todaySpecial.length}</span></h3></div><div class="sd-list">${todaySpecial.map((sd) => renderSpecialDayCard(sd, categoryMap.get(sd.categoryId))).join('')}</div>` : `<p class="empty-state">${t('sd_none_today')}</p>`}<div class="section-header"><p class="eyebrow">${t('special_days')}</p><button class="btn btn-ghost btn-sm" data-add-special-day>${t('add_special_day')}</button></div></section>` : ''}
+    ${windowSection(header, group, categoryMap)}
+    ${activeWindow === 'today' && doneTasks.length ? `<section class="card"><div class="section-header"><h3>${t('done_today_hdr')}<span class="muted count-inline">&nbsp;&middot;&nbsp;${doneTasks.filter((task) => (task.completedAt || '').slice(0, 10) === localDateStr()).length}</span></h3></div><div class="task-list">${doneTasks.filter((task) => (task.completedAt || '').slice(0, 10) === localDateStr()).map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('nothing_here')}</p>`}</div></section>` : ''}
+  `;
+  const addBtn = content.querySelector('[data-add-special-day]');
+  if (addBtn) addBtn.addEventListener('click', () => openSpecialDayModal());
+  const editBtns = content.querySelectorAll('[data-sd-edit]');
+  if (editBtns.length) {
+    editBtns.forEach((button) => {
+      button.addEventListener('click', () => {
+        const sd = specialDays.find((item) => item.id === Number(button.dataset.sdEdit));
+        openSpecialDayModalFor(sd);
+      });
+    });
+  }
+  attachTaskCardEvents(content);
+  refreshIcons();
+}
+
+export async function openSpecialDayModal() {
+  const { openSpecialDayForm } = await import('./components.js?v=14');
+  await openSpecialDayForm();
+}
+
+async function openSpecialDayModalFor(sd) {
+  const { openSpecialDayForm } = await import('./components.js?v=14');
+  await openSpecialDayForm(sd);
+}
+
+function windowTabs(activeWindow, isArchive) {
+  const base = isArchive ? 'archive' : 'time';
+  return `<div class="window-tabs">${TIME_WINDOWS.map((window) => `<button class="${window === activeWindow ? 'active' : ''}" data-window="${window}" data-archive-flag="${isArchive ? 'i' : ''}">${t(`window_${window}`)}</button>`).join('')}</div>`;
+}
+
 export async function renderUpcoming() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
-  const upcoming = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const upcoming = tasks.filter((task) => isOpenTask(task) && task.dueDate && task.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const content = document.querySelector('#view-content');
   content.innerHTML = taskSection(t('section_next'), upcoming, categoryMap);
   attachTaskCardEvents(content);
@@ -49,7 +108,7 @@ export async function renderUpcoming() {
 export async function renderCategory(categoryId) {
   const { categories, tasks, categoryMap } = await loadViewData();
   const category = categories.find((item) => item.id === Number(categoryId));
-  const filtered = tasks.filter((task) => task.categoryId === Number(categoryId) && !task.deletedAt);
+  const filtered = tasks.filter((task) => task.categoryId === Number(categoryId) && isOpenTask(task));
   document.querySelector('#view-content').innerHTML = taskSection(category?.name || t('no_category'), filtered, categoryMap);
   attachTaskCardEvents(document.querySelector('#view-content'));
   refreshIcons();
@@ -57,15 +116,38 @@ export async function renderCategory(categoryId) {
 
 export async function renderPriorityMatrix() {
   const { tasks, categoryMap } = await loadViewData();
-  const content = document.querySelector('#view-content');
-  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low', 'pending'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && task.status !== 'completed' && !task.deletedAt).map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}</div>`;
+  const nonDeleted = tasks.filter((task) => !task.deletedAt);
+  const openTasks = nonDeleted.filter((task) => task.status !== 'done' && task.status !== 'pending');
+  const statuses = ['not_started', 'in_progress', 'pending', 'done'];
+  const counts = Object.fromEntries(statuses.map((status) => [status, nonDeleted.filter((task) => task.status === status).length]));
+  const total = nonDeleted.length;
+  const donePct = total ? Math.round((counts.done / total) * 100) : 0;
+  const today = localDateStr();
+  const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today).length;
+  const inProgressNow = counts.in_progress;
+  const analysisBar = (status, count, color) => `<div class="pm-row" data-status="${count > 0 ? 'has' : 'empty'}"><span class="pm-dot" style="background:${color}"></span><span class="pm-label">${t(`status_${status}`)}</span><span class="pm-count">${count}</span></div>`;
+  const statusColors = { not_started: 'var(--accent)', in_progress: 'var(--danger)', pending: 'var(--warning)', done: 'var(--success)' };
+  const analysisRows = statuses.map((status) => analysisBar(
+    status, counts[status], statusColors[status]
+  )).join('');
+  const analysisCard = `
+    <section class="card pm-analysis">
+      <h3 class="pm-title">${t('pm_analysis')}</h3>
+      <div class="pm-status-list">${analysisRows}</div>
+      <div class="pm-progress"><div class="pm-progress-track"><div class="pm-progress-fill" style="width:${donePct}%"></div></div><span class="muted">${donePct}% ${t('stat_completed')}</span></div>
+      <div class="pm-foot muted">
+        <span class="pm-foot-item">${t('status_in_progress')}: <strong>${inProgressNow}</strong></span>
+        <span class="pm-foot-item">${t('stat_overdue')}: <strong>${overdue}</strong></span>
+      </div>
+    </section>`;
+  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && isOpenTask(task)).map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}${analysisCard}</div>`;
   attachTaskCardEvents(content);
   refreshIcons();
 }
 
 export async function renderDone() {
   const { tasks, categoryMap } = await loadViewData();
-  const done = tasks.filter((task) => task.status === 'completed' && !task.deletedAt);
+  const done = tasks.filter((task) => task.status === 'done' && !task.deletedAt);
   const groups = doneGroups(done);
   const content = document.querySelector('#view-content');
   if (!groups.length) {
@@ -77,20 +159,24 @@ export async function renderDone() {
   refreshIcons();
 }
 
-export async function renderArchive() {
+export async function renderArchive(activeWindow = 'today') {
   const { tasks, categoryMap } = await loadViewData();
-  const archived = tasks.filter((task) => task.deletedAt).sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
+  const archived = tasks.filter((task) => task.deletedAt);
+  const buckets = bucketByWindow(archived, (task) => task.deletedAt);
+  const group = (buckets[activeWindow] || []).slice().sort((a, b) => (b.deletedAt || '').localeCompare(a.deletedAt || ''));
   const content = document.querySelector('#view-content');
-  content.innerHTML = archived.length ? `
-    <div class="card">
-      <div class="section-header"><h3>${t('archive')}<span class="muted count-inline">&nbsp;&middot;&nbsp;${archived.length}</span></h3></div>
-      <div class="archive-list">
-        ${archived.map((task) => archiveRow(task, categoryMap.get(task.categoryId))).join('')}
-      </div>
-      <div class="hero-actions">
-        <button class="btn btn-danger" data-archive-empty>${t('empty_archive')}</button>
-      </div>
-    </div>` : `<p class="empty-state">${t('archive_empty')}</p>`;
+  content.innerHTML = `
+    ${windowTabs(activeWindow, true)}
+    ${group.length ? `
+      <div class="card">
+        <div class="section-header"><h3>${t('archive')}<span class="muted count-inline">&nbsp;&middot;&nbsp;${group.length}</span></h3></div>
+        <div class="archive-list">
+          ${group.map((task) => archiveRow(task, categoryMap.get(task.categoryId))).join('')}
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-danger" data-archive-empty>${t('empty_archive')}</button>
+        </div>
+      </div>` : `<p class="empty-state">${t('archive_empty')}</p>`}`;
   refreshIcons();
 }
 
@@ -107,7 +193,7 @@ function doneGroups(tasks) {
     const date = (task.completedAt || '').slice(0, 10);
     if (!date || date < weekStart) buckets[2].items.push(task);
     else if (date === today) buckets[0].items.push(task);
-    else buckets[1].items.push(task);
+    else buckets[i].items.push(task);
   }
   return buckets.filter((bucket) => bucket.items.length > 0);
 }
@@ -115,7 +201,7 @@ function doneGroups(tasks) {
 function startOfWeekDateStr() {
   const date = new Date();
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const month = String(date.getMonth() + i).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
 }
@@ -144,6 +230,9 @@ export async function renderSettings() {
   const profile = getProfile();
   const sync = getSyncStatus();
   const syncConfig = getSyncConfig();
+  const savedSyncLink = getSavedSyncLink();
+  const prefillUrl = syncConfig?.url || savedSyncLink?.url || getLastUrl() || '';
+  const prefillKey = syncConfig?.key || savedSyncLink?.key || '';
   const profileLine = [profile.name, profile.contact, profile.email].filter(Boolean).join(' · ') || t('s_account');
 
   content.innerHTML = `
@@ -199,6 +288,7 @@ export async function renderSettings() {
       ${settingsCardIcon('s_notifications', 's_notifications_desc', 'blue', icon('bell-ring'), `
         ${settingsRow('bell', 's_notif_reminders', 's_notif_reminders_desc', `<button class="setting-switch ${notifyPrefs.reminders ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.reminders}" aria-label="${t('s_notif_reminders')}" data-settings-action="pref-reminders"></button>`)}
         ${settingsRow('message-circle', 's_notif_popups', 's_notif_popups_desc', `<button class="setting-switch ${notifyPrefs.onboarding ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.onboarding}" aria-label="${t('s_notif_popups')}" data-settings-action="pref-onboarding"></button>`)}
+        ${settingsRow('timer', 's_auto_pending', 's_auto_pending_desc', `<button class="setting-switch ${notifyPrefs.autoPending ? 'on' : ''}" role="switch" aria-checked="${notifyPrefs.autoPending}" aria-label="${t('s_auto_pending')}" data-settings-action="pref-auto-pending"></button>`)}
         ${settingsRow('bell', 's_notif_reminders', t(notifStateKey), notifPerm === 'default' ? `<button class="btn btn-primary" data-request-notifications>${t('s_notif_enable')}</button>` : '')}
       `)}
       ${settingsCardIcon('s_broadcasts', 's_broadcasts_desc', 'purple', icon('megaphone'), `
@@ -227,14 +317,21 @@ export async function renderSettings() {
           <span class="muted" id="sync-last-label">${sync.lastSync ? `${t('s_sync_last')} ${formatLastSync(sync.lastSync)}` : ''}</span>
         </div>
         ${sync.error ? `<p class="muted sync-error">${escapeHtml(sync.error)}</p>` : ''}
+        ${savedSyncLink?.url ? `<div class="saved-link-chip" id="saved-link-chip">
+          <span class="saved-link-chip-url" title="${escapeAttr(savedSyncLink.url)}">${escapeHtml(savedSyncLink.url)}</span>
+          ${sync.status === 'connected' ? '' : `<button class="btn btn-primary btn-sm" type="button" data-settings-action="sync-reconnect">${t('s_sync_reconnect')}</button>`}
+          <button class="btn btn-ghost btn-sm" type="button" data-settings-action="sync-copy-link">${t('s_sync_copy_link')}</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-settings-action="sync-clear-link" aria-label="${t('s_sync_clear_link')}">${icon('x')}</button>
+        </div>` : `<p class="muted saved-link-none">${t('s_sync_saved_none')}</p>`}
         ${sync.status === 'connected'
           ? `${settingsRow('refresh-cw', 's_sync_now', 's_sync_now_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-now">${t('s_sync_now')}</button>`)}
         ${settingsRow('x', 's_sync_disconnect', 's_sync_disconnect_desc', `<button class="btn btn-ghost" type="button" data-settings-action="sync-disconnect">${t('s_sync_disconnect')}</button>`)}`
           : `<form id="sync-connect-form" class="sync-form" autocomplete="off">
-          <input class="field" id="sync-url" type="url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(syncConfig?.url || getLastUrl() || '')}" autocomplete="off" />
-          <input class="field" id="sync-key" type="password" placeholder="${t('s_sync_key_ph')}" value="${escapeAttr(syncConfig?.key || '')}" autocomplete="new-password" />
+          <input class="field" id="sync-url" type="url" placeholder="${t('s_sync_url_ph')}" value="${escapeAttr(prefillUrl)}" autocomplete="off" />
+          <input class="field" id="sync-key" type="password" placeholder="${t('s_sync_key_ph')}" value="${escapeAttr(prefillKey)}" autocomplete="off" />
           <div class="sync-actions">
             <button class="btn btn-primary" type="submit">${t('s_sync_connect')}</button>
+            <button class="btn btn-ghost" type="button" data-settings-action="sync-save-link">${t('s_sync_save_link')}</button>
           </div>
         </form>`}
         ${settingsRow('info', 's_sync_how_title', 's_sync_how_desc', `<button class="btn btn-ghost sync-how-trigger" type="button" data-settings-action="sync-how-trigger" aria-expanded="false" aria-controls="sync-how-details">${icon('chevron-down')} ${t('s_sync_how_title')}</button>`)}
@@ -273,7 +370,7 @@ export async function renderSettings() {
       `)}
       ${settingsCard('s_about', 's_about_desc', `
         ${settingsRow('shield', 's_privacy', 's_privacy_desc', '<span class="muted settings-check">Local by default</span>')}
-        ${settingsRow('info', 's_version', 's_version_desc', '<span class="muted settings-check">v1.1</span>')}
+        ${settingsRow('info', 's_version', 's_version_desc', '<span class="muted settings-check">vi.2.0</span>')}
       `)}
     </div>
   `;
@@ -340,6 +437,10 @@ function taskSection(title, tasks, categoryMap) {
   return `<section class="card"><div class="section-header"><h3>${title}<span class="muted count-inline">&nbsp;&middot;&nbsp;${tasks.length}</span></h3></div><div class="task-list">${tasks.map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('nothing_here')}</p>`}</div></section>`;
 }
 
+function windowSection(title, tasks, categoryMap) {
+  return `<section class="card"><div class="section-header"><h3>${title}<span class="muted count-inline">&nbsp;&middot;&nbsp;${tasks.length}</span></h3></div><div class="task-list">${tasks.map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('nothing_here')}</p>`}</div></section>`;
+}
+
 async function loadViewData() {
   const [categories, tasks] = await Promise.all([getCategories(), getTasks()]);
   return { categories, tasks, categoryMap: new Map(categories.map((category) => [category.id, category])) };
@@ -358,7 +459,7 @@ export async function updateNotifBadge() {
   if (!badge) return;
   const tasks = await getTasks();
   const today = localDateStr();
-  const count = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt && task.dueDate && task.dueDate <= today).length;
+  const count = tasks.filter((task) => isOpenTask(task) && task.dueDate && task.dueDate <= today).length;
   badge.textContent = count > 9 ? '9+' : String(count);
   badge.classList.toggle('hidden', count === 0);
 }
@@ -369,7 +470,7 @@ export async function renderNotificationsPanel() {
   const { tasks, categoryMap } = await loadViewData();
   const today = localDateStr();
   const soonLimit = addDaysDateStr(3);
-  const openTasks = tasks.filter((task) => task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt);
+  const openTasks = tasks.filter(isOpenTask);
   const groups = [
     { key: 'section_overdue', items: openTasks.filter((task) => task.dueDate && task.dueDate < today) },
     { key: 'section_today', items: openTasks.filter((task) => task.dueDate === today) },
@@ -403,7 +504,7 @@ function notifItem(task, category, meta) {
 function addDaysDateStr(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const month = String(date.getMonth() + i).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
 }
@@ -411,7 +512,7 @@ function addDaysDateStr(days) {
 function notifMeta(due, today) {
   if (due < today) return t('section_overdue');
   if (due === today) return t('section_today');
-  if (due === addDaysDateStr(1)) return t('notif_tomorrow');
+  if (due === addDaysDateStr(i)) return t('notif_tomorrow');
   const days = Math.max(2, Math.round((new Date(due + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000));
   return t('notif_in_days').replace('{n}', days);
 }

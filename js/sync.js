@@ -1,7 +1,8 @@
-﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=7';
+﻿import { db, getByUuid, localDateTimeStr, makeUuid } from './db.js?v=8';
 
 const CONFIG_KEY = 'todoMeva_sync';
 const LAST_URL_KEY = 'todoMeva_syncLastUrl';
+const SAVED_LINK_KEY = 'todoMeva_savedLink';
 const RECONNECT_INTERVAL = 30000;
 const PUSH_DEBOUNCE = 800;
 const PULL_DEBOUNCE = 1200;
@@ -77,7 +78,7 @@ function emit() {
 }
 
 function entityTable(entity) {
-  return ({ category: 'categories', activity: 'activities' }[entity] || `${entity}s`);
+  return ({ category: 'categories', activity: 'activities', special_day: 'special_days', history: 'history' }[entity] || `${entity}s`);
 }
 
 function isConnected() {
@@ -147,7 +148,9 @@ export async function pushAll() {
       ...docRows('category', await db.categories.toArray()),
       ...docRows('template', await db.templates.toArray()),
       ...docRows('task', await db.tasks.toArray()),
-      ...docRows('activity', await db.activities.toArray())
+      ...docRows('activity', await db.activities.toArray()),
+      ...docRows('history', await db.history.toArray()),
+      ...docRows('special_day', await db.special_days.toArray())
     ];
     if (rows.length) {
       const { error } = await state.client.from('sync_docs').upsert(rows, { onConflict: 'id' });
@@ -192,6 +195,9 @@ async function applyEntity(entity, rows, remap) {
     if (data.templateId != null) data.templateId = remap[`template:${data.templateId}`] ?? data.templateId;
     if (data.parentTaskId != null) data.parentTaskId = remap[`task:${data.parentTaskId}`] ?? data.parentTaskId;
     if (data.taskId != null) data.taskId = remap[`task:${data.taskId}`] ?? data.taskId;
+    if (entity === 'task' && data.status === 'todo') data.status = 'not_started';
+    if (entity === 'task' && data.status === 'completed') data.status = 'done';
+    if (entity === 'task' && typeof data.focusMinutes !== 'undefined' && !data.durationMinutes) data.durationMinutes = data.focusMinutes;
     normalizeTimestamps(entity, data);
     if (newId == null) newId = await table.add(data);
     else await table.update(newId, data);
@@ -207,7 +213,7 @@ export async function applyRemote() {
   try {
     const { data, error } = await state.client.from('sync_docs').select('*').order('updated_at', { ascending: true });
     if (error) throw error;
-    const byEntity = { category: [], template: [], task: [], activity: [] };
+    const byEntity = { category: [], template: [], task: [], activity: [], history: [], special_day: [] };
     for (const row of data || []) {
       if (byEntity[row.entity]) byEntity[row.entity].push(row);
     }
@@ -218,6 +224,8 @@ export async function applyRemote() {
       await applyEntity('template', byEntity.template, remap);
       await applyEntity('task', byEntity.task, remap);
       await applyEntity('activity', byEntity.activity, remap);
+      await applyEntity('history', byEntity.history, remap);
+      await applyEntity('special_day', byEntity.special_day, remap);
     } finally {
       state.applyingRemote = false;
     }
@@ -298,13 +306,38 @@ let raw = String(url).trim();
   };
   window.addEventListener('online', state.onlineHandler);
   startRealtime();
-await pushAll();
+  await pushAll();
   await applyRemote();
   localStorage.setItem(LAST_URL_KEY, raw);
+  saveSyncLink(raw, String(key).trim());
 }
 
 export function getLastUrl() {
   return localStorage.getItem(LAST_URL_KEY) || '';
+}
+
+export function getSavedSyncLink() {
+  try {
+    const raw = localStorage.getItem(SAVED_LINK_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSyncLink(url, key) {
+  const clean = {
+    url: String(url || '').trim(),
+    key: String(key || '').trim()
+  };
+  if (clean.url || clean.key) {
+    try { localStorage.setItem(SAVED_LINK_KEY, JSON.stringify(clean)); } catch {}
+  }
+  return clean;
+}
+
+export function clearSavedSyncLink() {
+  try { localStorage.removeItem(SAVED_LINK_KEY); } catch {}
 }
 
 export async function manualSync() {

@@ -1,11 +1,15 @@
-﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
-import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
-import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { getLang, t } from './i18n.js?v=12';
-import { isPrefEnabled } from './prefs.js?v=4';
-import { pushDeletion } from './sync.js?v=9';
+import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, getHistory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, resumeFromPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask, addSpecialDay, updateSpecialDay, getSpecialDays, archiveSpecialDay, restoreSpecialDay, permanentDeleteSpecialDay } from './db.js?v=8';
+import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=6';
+import { createRecurringTaskInstance } from './recurrence.js?v=7';
+import { getLang, t } from './i18n.js?v=14';
+import { isPrefEnabled } from './prefs.js?v=5';
+import { pushDeletion } from './sync.js?v=11';
 import { getProfile, saveProfile } from './account.js?v=4';
-import { confirmDialog } from './dialog.js?v=1';
+import { confirmDialog } from './dialog.js?v=2';
+
+export const STATUS_ORDER = ['not_started', 'in_progress', 'done'];
+export const NEXT_STATUS = { not_started: 'in_progress', in_progress: 'done' };
+export const PREV_STATUS = { done: 'in_progress', in_progress: 'not_started' };
 
 let selectedCategoryId = null;
 
@@ -16,7 +20,7 @@ export function icon(name) {
 export function formStateSnapshot(form) {
   const entries = [];
   new FormData(form).forEach((value, key) => entries.push([key, String(value)]));
-  return JSON.stringify(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+  return JSON.stringify(entries.sort((a, b) => (a[0] < b[0] ? -i : a[0] > b[0] ? i : 0)));
 }
 
 export function refreshIcons() {
@@ -57,8 +61,7 @@ export function priorityOptions() {
   return [
     { value: 'high', label: t('priority_high') },
     { value: 'medium', label: t('priority_medium') },
-    { value: 'low', label: t('priority_low') },
-    { value: 'pending', label: t('priority_pending') }
+    { value: 'low', label: t('priority_low') }
   ];
 }
 
@@ -113,16 +116,16 @@ function intlLocale() {
 function formatDateLabel(value) {
   if (!value) return '';
   const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - i, day));
 }
 
 function calMonthTitle(year, month) {
-  return `${new Intl.DateTimeFormat(intlLocale(), { month: 'long' }).format(new Date(year, month, 1))} ${year}`;
+  return `${new Intl.DateTimeFormat(intlLocale(), { month: 'long' }).format(new Date(year, month, i))} ${year}`;
 }
 
 function calWeekdayNames() {
   const names = [];
-  for (let index = 0; index < 7; index += 1) {
+  for (let index = 0; index < 7; index += i) {
     const label = new Intl.DateTimeFormat(intlLocale(), { weekday: 'narrow' }).format(new Date(2026, 0, 4 + index));
     names.push(label);
   }
@@ -130,15 +133,15 @@ function calWeekdayNames() {
 }
 
 function calGrid(year, month, selectedValue) {
-  const first = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const first = new Date(year, month, i).getDay();
+  const daysInMonth = new Date(year, month + i, 0).getDate();
   const cells = [];
-  for (let index = 0; index < 42; index += 1) {
-    const day = index - first + 1;
-    if (day < 1 || day > daysInMonth) {
+  for (let index = 0; index < 42; index += i) {
+    const day = index - first + i;
+    if (day < i || day > daysInMonth) {
       cells.push('<span class="cal-day empty"></span>');
     } else {
-      const value = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const value = `${year}-${String(month + i).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const today = value === localDateStr();
       const selected = value === selectedValue;
       cells.push(`<button type="button" class="cal-day${selected ? ' selected' : ''}${today ? ' today' : ''}" data-cal-day="${value}" data-year="${year}" data-month="${month}" data-day="${day}">${day}</button>`);
@@ -190,7 +193,7 @@ function refreshCalView(picker) {
 export function bindDatePickers(root = document) {
   root.querySelectorAll('[data-date-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
-    picker.dataset.bound = '1';
+    picker.dataset.bound = 'i';
     const trigger = picker.querySelector('[data-date-trigger]');
     const menu = picker.querySelector('[data-date-menu]');
     trigger.addEventListener('click', (event) => {
@@ -208,11 +211,11 @@ export function bindDatePickers(root = document) {
       const clear = event.target.closest('[data-cal-clear]');
       const day = event.target.closest('[data-cal-day]');
       if (prev || next) {
-        const offset = prev ? -1 : 1;
+        const offset = prev ? -i : i;
         let year = Number(menu.dataset.calYear);
         let month = Number(menu.dataset.calMonth) + offset;
-        if (month < 0) { month = 11; year -= 1; }
-        if (month > 11) { month = 0; year += 1; }
+        if (month < 0) { month = 11; year -= i; }
+        if (month > 11) { month = 0; year += i; }
         menu.dataset.calYear = year;
         menu.dataset.calMonth = month;
         refreshCalView(picker);
@@ -234,7 +237,7 @@ export function bindDatePickers(root = document) {
 export function bindCategoryPickers(root = document) {
   root.querySelectorAll('[data-cat-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
-    picker.dataset.bound = '1';
+    picker.dataset.bound = 'i';
     picker.querySelector('[data-cat-trigger]').addEventListener('click', (event) => {
       event.stopPropagation();
       const menu = picker.querySelector('[data-cat-menu]');
@@ -323,7 +326,7 @@ document.querySelectorAll('.modal-card').forEach((card) => card.addEventListener
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
   const countByCategory = tasks.reduce((counts, task) => {
-    if (task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt) counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
+    if (task.status !== 'done' && task.status !== 'pending' && !task.deletedAt) counts[task.categoryId] = (counts[task.categoryId] || 0) + i;
     return counts;
   }, {});
   const archivedCount = tasks.filter((task) => task.deletedAt).length;
@@ -334,7 +337,7 @@ export function renderSidebar(categories, tasks, activeView) {
         <p class="sidebar-title">${t('views')}</p>
         ${[
           ['dashboard', 'layout-dashboard', t('dashboard'), ''],
-          ['upcoming', 'calendar-days', t('upcoming'), ''],
+          ['time', 'clock', t('time'), ''],
           ['priority', 'flag', t('priority_matrix'), ''],
           ['done', 'check-check', t('done'), ''],
           ['archive', 'archive', t('archive'), archivedCount ? String(archivedCount) : '']
@@ -355,8 +358,25 @@ export function renderSidebar(categories, tasks, activeView) {
   refreshIcons();
 }
 
-function focusLabel(task) {
-  const minutes = Number(task.focusMinutes) || 25;
+function canTransition(from, to) {
+  if (to === from) return false;
+  if (to === 'pending' && from !== 'pending') return true;
+  if (NEXT_STATUS[from] === to) return true;
+  if (PREV_STATUS[from] === to) return true;
+  if (from === 'pending' && to === 'in_progress') return true;
+  return false;
+}
+
+function statusTarget(current, to) {
+  if (to === 'pending' && current !== 'pending') return 'pending';
+  if (to === 'in_progress' && current === 'pending') return 'in_progress';
+  if (NEXT_STATUS[current] === to) return NEXT_STATUS[current];
+  if (PREV_STATUS[current] === to) return PREV_STATUS[current];
+  return current;
+}
+
+function timerLabel(task) {
+  const minutes = Number(task.durationMinutes) || 0;
   if (task.focusStartedAt) {
     const start = new Date(task.focusStartedAt).getTime();
     const end = start + minutes * 60000;
@@ -374,12 +394,17 @@ function formatRemaining(ms) {
 
 export function renderTaskCard(task, category) {
   const priority = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
-  const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.todo;
-  const isOpen = task.status !== 'completed' && task.priority !== 'pending' && !task.deletedAt;
-  const running = isOpen && Boolean(task.focusStartedAt) && Number(task.focusMinutes) > 0;
+  const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.not_started;
+  const isOpen = task.status !== 'done' && !task.deletedAt;
+  const running = isOpen && task.status === 'in_progress' && Boolean(task.focusStartedAt) && Number(task.durationMinutes) > 0;
   return `
-    <article class="task-card ${task.status === 'completed' ? 'completed' : ''}" data-task-id="${task.id}">
-      <button class="status-btn ${task.status}" data-status-toggle="${task.id}" title="${status.label}"></button>
+    <article class="task-card ${task.status === 'done' ? 'completed' : ''} ${task.status === 'pending' ? 'pending' : ''}" data-task-id="${task.id}">
+      ${isOpen ? `<div class="task-status-bar">${STATUS_ORDER.map((st) => {
+        const label = t(`status_${st}`) || STATUS_CONFIG[st]?.label || st;
+        const active = task.status === st;
+        const enabled = canTransition(task.status, st);
+        return `<button class="status-seg${active ? ' active' : ''}${enabled ? '' : ' disabled'}" data-status-target="${st}" title="${label}">${label}</button>`;
+      }).join('')}<button class="status-seg status-pending${task.status === 'pending' ? ' active' : ''}${canTransition(task.status, 'pending') ? '' : ' disabled'}" data-status-target="pending" title="Pending">${t('status_pending')}</button></div>` : ''}
       <div>
         <p class="task-title">${escapeHtml(task.title)}</p>
         ${task.description ? `<p class="muted">${escapeHtml(task.description)}</p>` : ''}
@@ -388,10 +413,7 @@ export function renderTaskCard(task, category) {
           ${task.dueDate ? `<span>${t('due_prefix')} ${task.dueDate}</span>` : ''}
           ${task.recurrence && task.recurrence !== 'none' ? `<span>${t('repeats_prefix')} ${t(`repeat_${task.recurrence}`)}</span>` : ''}
         </div>
-        ${isOpen ? `<div class="task-actions">
-          <button class="chip-btn" data-skip-task="${task.id}" title="${t('skip_to_pending')}">${icon('skip-forward')}<span>${t('skip_to_pending')}</span></button>
-          ${Number(task.focusMinutes) > 0 ? `<button class="chip-btn ${running ? 'active' : ''}" data-focus-toggle="${task.id}" title="${running ? t('focus_pause') : t('focus_start')}">${icon(running ? 'pause' : 'play')}<span data-focus-chip="${task.id}">${focusLabel(task)}</span></button>` : ''}
-        </div>` : ''}
+        ${Number(task.durationMinutes) > 0 ? `<div class="task-actions">${running ? `<button class="chip-btn active" data-timer-toggle="${task.id}" title="Pause timer"><i data-lucide="pause"></i><span data-timer-chip="${task.id}">${timerLabel(task)}</span></button>` : task.status === 'in_progress' ? `<button class="chip-btn" data-timer-toggle="${task.id}" title="Start timer"><i data-lucide="play"></i><span>${timerLabel(task)}</span></button>` : ''}</div>` : ''}
       </div>
       <span class="badge ${priority.className}">${t(`priority_${task.priority}`)}</span>
     </article>
@@ -401,28 +423,40 @@ export function renderTaskCard(task, category) {
 export function attachTaskCardEvents(container = document) {
   container.querySelectorAll('[data-task-id]').forEach((card) => {
     card.addEventListener('click', (event) => {
-      if (event.target.closest('[data-status-toggle]')) return;
-      if (event.target.closest('[data-skip-task]')) return;
-      if (event.target.closest('[data-focus-toggle]')) return;
+      if (event.target.closest('[data-status-target]')) return;
+      if (event.target.closest('[data-timer-toggle]')) return;
       openTaskDetail(card.dataset.taskId);
     });
   });
-  container.querySelectorAll('[data-status-toggle]').forEach((button) => {
+  container.querySelectorAll('[data-status-target]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await toggleTaskStatus(button.dataset.statusToggle);
+      const taskId = button.closest('[data-task-id]')?.dataset.taskId;
+      if (!taskId) return;
+      const target = button.dataset.statusTarget;
+      const task = await getTask(taskId);
+      if (!task || target === task.status) return;
+      const actual = statusTarget(task.status, target);
+      if (!canTransition(task.status, actual)) return;
+      if (actual === task.status) return;
+      const confirm = await confirmDialog({
+        title: t(`status_${actual}`),
+        message: `${t('move_to')} "${t(`status_${actual}`) || actual}"?`,
+        confirmText: t('ok'),
+        dismissText: t('cancel')
+      });
+      if (!confirm) return;
+      if (actual === 'pending') await sendToPending(taskId, 'manual');
+      else if (task.status === 'pending' && actual === 'in_progress') await resumeFromPending(taskId);
+      else await setTaskStatus(taskId, actual, 'manual');
+      if (actual === 'done' && task.recurrence !== 'none') await createRecurringTaskInstance(task);
       window.refreshCurrentView();
     });
   });
-  container.querySelectorAll('[data-skip-task]').forEach((button) => {
+  container.querySelectorAll('[data-timer-toggle]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await sendToPending(Number(button.dataset.skipTask));
-      window.refreshCurrentView();
-    });
-  });
-  container.querySelectorAll('[data-focus-toggle]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const id = Number(button.dataset.focusToggle);
+      const id = Number(button.dataset.timerToggle);
       const task = await getTask(id);
+      if (!task) return;
       if (task.focusStartedAt) await stopFocus(id);
       else await startFocus(id);
       window.refreshCurrentView();
@@ -432,9 +466,16 @@ export function attachTaskCardEvents(container = document) {
 
 export async function toggleTaskStatus(id) {
   const task = await getTask(id);
-  const next = task.status === 'todo' ? 'in_progress' : task.status === 'in_progress' ? 'completed' : 'todo';
-  await setTaskStatus(id, next);
-  if (next === 'completed') await createRecurringTaskInstance(task);
+  if (!task) return;
+  if (task.status === 'not_started') await setTaskStatus(id, 'in_progress', 'manual');
+  else if (task.status === 'in_progress') {
+    await setTaskStatus(id, 'done', 'manual');
+    if (task.recurrence !== 'none') await createRecurringTaskInstance(task);
+  } else if (task.status === 'pending') {
+    await resumeFromPending(id);
+  } else if (task.status === 'done') {
+    await setTaskStatus(id, 'in_progress', 'reopen');
+  }
 }
 
 export async function archiveTaskById(id) {
@@ -566,7 +607,7 @@ async function handleQuickAddClick(event) {
     template.classList.add('active');
     const clearEl = document.createElement('span');
     clearEl.className = 'template-chip-clear';
-    clearEl.dataset.templateClear = '1';
+    clearEl.dataset.templateClear = 'i';
     clearEl.setAttribute('role', 'button');
     clearEl.setAttribute('aria-label', t('clear_quick_task'));
     clearEl.innerHTML = icon('x');
@@ -589,10 +630,15 @@ async function submitCreateTask(event) {
 export async function openTaskDetail(id) {
   const task = await getTask(id);
   const categories = await getCategories();
+  const history = await getHistory(id);
   document.querySelector('#task-modal').classList.remove('hidden');
   document.querySelector('#task-modal-body').innerHTML = `
     <div class="modal-header"><div><h3><span class="hdr-accent">${t('edit_task')}:</span> ${escapeHtml(task.title)}</h3></div><button class="icon-btn" data-close-task>${icon('x')}</button></div>
     ${taskForm(task, categories, 'edit-task-form')}
+    <div class="task-track-card">
+      <div class="task-track-id">${icon('fingerprint')}<span>${t('tracking_id')}: <code>${escapeHtml(task.trackingId || '')}</code></span><button class="btn btn-ghost btn-sm" data-copy-tracking>${t('copy')}</button></div>
+    </div>
+    ${history.length ? `<div class="task-history"><h4>${t('history')}</h4><div class="history-list">${history.map(historyRow).join('')}</div></div>` : ''}
   `;
   document.querySelector('#edit-task-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -603,11 +649,30 @@ export async function openTaskDetail(id) {
   document.querySelector('[data-close-task]').addEventListener('click', () => closeIfDirty('#task-modal', closeTaskModal));
   document.querySelector('[data-cancel-modal]')?.addEventListener('click', () => closeIfDirty('#task-modal', closeTaskModal));
   document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
+  document.querySelector('[data-copy-tracking]')?.addEventListener('click', async (event) => {
+    try {
+      await navigator.clipboard.writeText(task.trackingId || '');
+      event.currentTarget.textContent = t('bc_copied');
+      setTimeout(() => { event.currentTarget.textContent = t('copy'); }, 1500);
+    } catch {}
+  });
   bindCategoryPickers(document.querySelector('#task-modal-body'));
   bindDatePickers(document.querySelector('#task-modal-body'));
   const editForm = document.querySelector('#edit-task-form');
   if (editForm) document.querySelector('#task-modal').dataset.formBaseline = formStateSnapshot(editForm);
   refreshIcons();
+}
+
+function historyRow(entry) {
+  const fromLabel = entry.type === 'status' || entry.type === 'delete' || entry.type === 'archive'
+    ? (t(`status_${entry.from}`) || entry.from || '�')
+    : (entry.from || '�');
+  const toLabel = entry.type === 'status' || entry.type === 'delete' || entry.type === 'archive'
+    ? (t(`status_${entry.to}`) || entry.to || '�')
+    : (entry.to || '�');
+  const reasonKey = ({ created: 'h_created', edit: 'h_edited', manual: 'h_manual', resume: 'h_resumed', archived: 'h_archived', restored: 'h_restored', permanent_delete: 'h_deleted', start: 'h_timer_start', stop: 'h_timer_stop', not_started_by_due_date: 'h_auto_pend_due', in_progress_past_due: 'h_auto_pend_overdue' })[entry.reason];
+  const reasonText = reasonKey ? t(reasonKey) : entry.reason;
+  return `<div class="history-row"><span class="history-time">${escapeHtml(entry.timestamp)}</span><span class="history-flow">${escapeHtml(fromLabel)} ${icon('arrow-right')} ${escapeHtml(toLabel)}</span><span class="history-reason">${escapeHtml(reasonText)}</span></div>`;
 }
 
 function focusOptions() {
@@ -616,13 +681,15 @@ function focusOptions() {
     { value: '15', label: t('focus_15') },
     { value: '25', label: t('focus_25') },
     { value: '45', label: t('focus_45') },
-    { value: '60', label: t('focus_60') }
+    { value: '60', label: t('focus_60') },
+    { value: '90', label: t('focus_90') },
+    { value: '120', label: t('focus_120') }
   ];
 }
 
 function taskForm(task, categories, id) {
   const isEdit = Boolean(task.id);
-  const focus = task.focusMinutes ? String(task.focusMinutes) : '';
+  const focus = task.durationMinutes ? String(task.durationMinutes) : '';
   return `
     <form id="${id}" class="form-grid">
       <input type="hidden" name="templateId" value="${task.templateId || ''}" />
@@ -638,8 +705,10 @@ function taskForm(task, categories, id) {
         <div><label class="flabel">${t('field_due_date')}</label>${renderDatePicker(task.dueDate || '')}</div>
         <div><label class="flabel">${t('field_repeat')}</label>${renderPicker('recurrence', t('no_repeat'), recurrenceOptions(), task.recurrence || 'none', 'repeat')}</div>
       </div>
-      <div><label class="flabel">${t('field_reminder')}</label>${renderPicker('reminder', t('no_reminder'), reminderOptions(), task.reminders?.[0]?.minutesBefore ? String(task.reminders[0].minutesBefore) : '', 'bell')}</div>
-      <div><label class="flabel">${t('field_focus')}</label>${renderPicker('focusMinutes', t('focus_off'), focusOptions(), focus, 'timer')}</div>
+      <div class="two-col form-grid">
+        <div><label class="flabel">${t('field_reminder')}</label>${renderPicker('reminder', t('no_reminder'), reminderOptions(), task.reminders?.[0]?.minutesBefore ? String(task.reminders[0].minutesBefore) : '', 'bell')}</div>
+        <div><label class="flabel">${t('field_duration')}</label>${renderPicker('durationMinutes', t('focus_off'), focusOptions(), focus || 'off', 'timer')}</div>
+      </div>
       <div class="modal-footer">
         <span class="footer-hint">${t('form_footer_hint')}</span>
         <div class="footer-actions">
@@ -663,12 +732,139 @@ function formToTask(form) {
     dueDate: form.get('dueDate'),
     recurrence: form.get('recurrence'),
     reminders: reminder ? [{ minutesBefore: Number(reminder), fired: false }] : [],
-    focusMinutes: Number(form.get('focusMinutes')) || 0
+    durationMinutes: Number(form.get('durationMinutes')) || 0
   };
 }
 
 export function closeQuickAdd() {
   document.querySelector('#quick-add-modal').classList.add('hidden');
+}
+
+export const SPECIAL_DAY_TYPES = ['birthday', 'anniversary', 'event', 'festival'];
+
+export function renderSpecialDayCard(sd, category) {
+  const typeLabel = t(`sd_type_${sd.type}`) || sd.type;
+  return `
+    <article class="sd-card" data-sd-id="${sd.id}">
+      <span class="sd-icon" style="background:${escapeHtml(category?.color || '#f97316')}">${icon('calendar-heart')}</span>
+      <div>
+        <p class="task-title">${escapeHtml(sd.title)}</p>
+        <p class="muted">${escapeHtml(typeLabel)}${category?.name ? ` � ${escapeHtml(category.name)}` : ''}${sd.recurring === 'yearly' ? ` � ${t('sd_yearly')}` : ` � ${t('sd_once')}`}</p>
+      </div>
+      <button class="icon-btn" data-sd-edit="${sd.id}" title="${t('edit_task')}">${icon('pencil')}</button>
+    </article>
+  `;
+}
+
+export async function openSpecialDayForm(sd = null, prefillDate = '') {
+  const categories = await getCategories();
+  const body = document.querySelector('#special-day-modal-body');
+  document.querySelector('#special-day-modal').classList.remove('hidden');
+  const isEdit = Boolean(sd);
+  const values = sd || { title: '', type: 'event', date: prefillDate || localDateStr(), recurring: 'yearly', categoryId: '', notes: '' };
+  body.innerHTML = `
+    <div class="modal-header"><div><h3>${isEdit ? `${t('edit_task')}: ${escapeHtml(sd.title)}` : t('add_special_day')}</h3></div><button class="icon-btn close-modal-btn">${icon('x')}</button></div>
+    <form id="special-day-form" class="form-grid">
+      <label class="flabel" for="sd-title">${t('field_task_title')} <span class="req" aria-hidden="true">*</span></label>
+      <input class="field" id="sd-title" name="title" value="${escapeAttr(values.title || '')}" required />
+      <div class="two-col form-grid">
+        <div><label class="flabel">${t('sd_type')}</label>${renderPicker('type', t('sd_type_event'), SPECIAL_DAY_TYPES.map((type) => ({ value: type, label: t(`sd_type_${type}`) })), values.type || 'event', 'calendar-heart')}</div>
+        <div><label class="flabel">${t('field_due_date')}</label>${renderDatePicker(values.date || '')}</div>
+      </div>
+      <div class="two-col form-grid">
+        <div><label class="flabel">${t('sd_recurring')}</label>${renderPicker('recurring', t('sd_yearly'), [{ value: 'yearly', label: t('sd_yearly') }, { value: 'once', label: t('sd_once') }], values.recurring || 'yearly', 'repeat')}</div>
+        <div><label class="flabel">${t('field_category')}</label>${renderCategoryPicker(values.categoryId, categories)}</div>
+      </div>
+      <label class="flabel" for="sd-notes">${t('field_description')}</label>
+      <textarea class="textarea" id="sd-notes" name="notes" placeholder="${t('description_placeholder')}">${escapeHtml(values.notes || '')}</textarea>
+      <div class="modal-footer">
+        <span class="footer-hint"></span>
+        <div class="footer-actions">
+          ${isEdit ? `<button type="button" class="btn btn-danger" data-sd-delete="${sd.id}">${t('delete_task')}</button>` : ''}
+          <button type="button" class="btn" data-cancel-modal>${t('cancel')}</button>
+          <button class="btn btn-primary" type="submit">${t('save_task')}</button>
+        </div>
+      </div>
+    </form>
+  `;
+  body.onclick = async (event) => {
+    if (event.target.closest('.close-modal-btn') || event.target.closest('[data-cancel-modal]')) {
+      document.querySelector('#special-day-modal').classList.add('hidden');
+      return;
+    }
+    const deleteBtn = event.target.closest('[data-sd-delete]');
+    if (deleteBtn) {
+      if (!(await confirmDialog({ title: t('delete_task'), message: t('delete_confirm'), confirmText: t('delete_task'), danger: true }))) return;
+      await archiveSpecialDay(Number(deleteBtn.dataset.sdDelete));
+      closeSpecialDayModal();
+      window.refreshCurrentView();
+      return;
+    }
+  };
+  document.querySelector('#special-day-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const payload = {
+      title: data.get('title'),
+      type: data.get('type'),
+      date: data.get('dueDate'),
+      recurring: data.get('recurring'),
+      categoryId: data.get('categoryId') ? Number(data.get('categoryId')) : null,
+      notes: data.get('notes')
+    };
+    if (isEdit) await updateSpecialDay(sd.id, payload);
+    else await addSpecialDay(payload);
+    closeSpecialDayModal();
+    window.refreshCurrentView();
+  });
+  bindCategoryPickers(body);
+  bindDatePickers(body);
+  refreshIcons();
+}
+
+export function closeSpecialDayModal() {
+  document.querySelector('#special-day-modal')?.classList.add('hidden');
+}
+
+export async function openTimerPopup(task) {
+  const card = document.querySelector('#timer-popup-card');
+  const overlay = document.querySelector('#timer-popup');
+  if (!card || !overlay) return;
+  overlay.classList.remove('hidden');
+  card.innerHTML = `
+    <div class="modal-header"><div><h3>${t('timer_done')}</h3></div><button class="icon-btn close-modal-btn" data-timer-close>${icon('x')}</button></div>
+    <p class="muted">${escapeHtml(task.title)}</p>
+    <div class="timer-choices">
+      <button class="btn btn-primary" data-timer-choice="done">${t('move_done')}</button>
+      <button class="btn" data-timer-choice="extend">${t('keep_going')}</button>
+      <button class="btn" data-timer-choice="pending">${t('mark_pending')}</button>
+      <button class="btn btn-ghost" data-timer-choice="start">${t('back_to_start')}</button>
+    </div>
+  `;
+  const finish = async (choice) => {
+    overlay.classList.add('hidden');
+    if (choice === 'done') {
+      await setTaskStatus(task.id, 'done', 'timer_done');
+      if (task.recurrence !== 'none') await createRecurringTaskInstance(task);
+    } else if (choice === 'extend') {
+      const minutes = Math.max(i, Number(task.durationMinutes) || 25) + 25;
+      await updateTask(task.id, { durationMinutes: minutes });
+      await startFocus(task.id);
+    } else if (choice === 'pending') {
+      await sendToPending(task.id, 'timer_done');
+    } else if (choice === 'start') {
+      await setTaskStatus(task.id, 'not_started', 'timer_done');
+    }
+    window.refreshCurrentView();
+  };
+  const closeBtn = card.querySelector('[data-timer-close]');
+  if (closeBtn) closeBtn.addEventListener('click', () => overlay.classList.add('hidden'));
+  card.querySelectorAll('[data-timer-choice]').forEach((button) => {
+    button.addEventListener('click', () => finish(button.dataset.timerChoice));
+  });
+  overlay.onclick = (event) => {
+    if (event.target.id === 'timer-popup') overlay.classList.add('hidden');
+  };
 }
 
 function closeTaskModal() {
@@ -704,7 +900,7 @@ export function showOnboarding() {
       </div>
     </form>`;
   const finish = () => {
-    localStorage.setItem('todoMeva_onboarded', '1');
+    localStorage.setItem('todoMeva_onboarded', 'i');
     overlay.classList.add('hidden');
   };
   card.querySelector('#onboarding-form').addEventListener('submit', (event) => {

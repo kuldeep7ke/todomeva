@@ -1,6 +1,6 @@
 const PREFS_KEY = 'todoMeva_notify_prefs';
 
-const DEFAULTS = { reminders: true, onboarding: true };
+const DEFAULTS = { reminders: true, onboarding: true, autoPending: true };
 
 export function getNotifyPrefs() {
   try {

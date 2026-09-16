@@ -1,17 +1,19 @@
-import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
-import { archiveTaskById, closeQuickAdd, emptyArchiveAll, formStateSnapshot, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=13';
-import { renderBasics, renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderRecommended, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=19';
-import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
-import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
+import { exportData, getCategories, getTasks, importData, localDateStr, seedDatabase, sendToPending, setTaskStatus } from './db.js?v=8';
+import { archiveTaskById, closeQuickAdd, emptyArchiveAll, formStateSnapshot, openQuickAdd, openTaskDetail, openTimerPopup, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=14';
+import { renderBasics, renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderRecommended, renderSettings, renderTime, renderUpcoming, renderNotificationsPanel, openSpecialDayModal, updateNotifBadge, updateSyncStatusUI } from './views.js?v=22';
+import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=8';
+import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=5';
 import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=12';
-import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=9';
-import { confirmDialog, isDialogOpen } from './dialog.js?v=1';
-import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=5';
+import { initLang, setLang, t } from './i18n.js?v=15';
+import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL, saveSyncLink, clearSavedSyncLink, getSavedSyncLink } from './sync.js?v=11';
+import { confirmDialog, isDialogOpen } from './dialog.js?v=2';
+import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=6';
 
 let activeView = 'dashboard';
+let activeWindow = 'today';
 let initPromise = null;
 let lastSyncRefresh = 0;
+let timerPopupShownFor = new Map();
 
 window.__enterApp = function enterApp() {
   document.querySelector('#landing-page').classList.add('hidden');
@@ -29,6 +31,9 @@ window.navigateTo = navigateTo;
 
 document.querySelectorAll('[data-enter-app]').forEach((button) => button.addEventListener('click', window.__enterApp));
 
+const isReturningUser = Boolean(localStorage.getItem('todoMeva_lang'));
+if (isReturningUser) window.__enterApp();
+
 async function initApp() {
   if (initPromise) return initPromise;
   initPromise = (async () => {
@@ -41,17 +46,40 @@ async function initApp() {
     initBroadcasts();
     setInterval(checkAndFireReminders, 30000);
     setInterval(tickFocusTimers, 1000);
+    setInterval(autoPendOverdue, 60000);
+    autoPendOverdue();
   })();
   return initPromise;
 }
 
+async function autoPendOverdue() {
+  if (!getNotifyPrefs().autoPending) return;
+  const tasks = await getTasks();
+  const today = localDateStr();
+  let changed = false;
+  for (const task of tasks) {
+    if (task.deletedAt || task.status === 'pending' || task.status === 'done') continue;
+    if (!task.dueDate || task.dueDate >= today) continue;
+    if (task.status === 'not_started') {
+      await sendToPending(task.id, 'not_started_by_due_date');
+      changed = true;
+    } else if (task.status === 'in_progress') {
+      await sendToPending(task.id, 'in_progress_past_due');
+      changed = true;
+    }
+  }
+  if (changed) await refreshCurrentView();
+}
+
 async function autoConnect() {
-  const { autoConnect: connect } = await import('./sync.js?v=9');
+  const { autoConnect: connect } = await import('./sync.js?v=11');
   await connect();
 }
 
 function wireGlobalEvents() {
-  document.querySelector('#fab').addEventListener('click', () => openQuickAdd());
+  renderFabMenu();
+  document.querySelector('#fab').addEventListener('click', toggleFabMenu);
+  document.querySelector('#fab-menu').addEventListener('click', handleFabMenuClick);
   document.querySelector('#mobile-menu-btn').addEventListener('click', openSidebar);
   document.querySelector('#sidebar-backdrop').addEventListener('click', closeSidebar);
   document.querySelector('#theme-toggle').addEventListener('click', toggleTheme);
@@ -64,6 +92,7 @@ function wireGlobalEvents() {
   document.querySelector('#quick-add-modal').addEventListener('click', (event) => { if (event.target.id === 'quick-add-modal') guardModalClose('#quick-add-modal', closeQuickAdd); });
   document.querySelector('#task-modal').addEventListener('click', (event) => { if (event.target.id === 'task-modal') guardModalClose('#task-modal', closeTaskModal); });
   document.addEventListener('click', (event) => {
+    if (!event.target.closest('.fab-wrap')) closeFabMenu();
     if (!event.target.closest('.notif-wrap')) closeNotifications();
   });
   document.addEventListener('keydown', (event) => {
@@ -82,6 +111,17 @@ function wireGlobalEvents() {
         guardModalClose('#task-modal', closeTaskModal);
         return;
       }
+      const sdModal = document.querySelector('#special-day-modal');
+      if (sdModal && !sdModal.classList.contains('hidden')) {
+        sdModal.classList.add('hidden');
+        return;
+      }
+      const timerPopup = document.querySelector('#timer-popup');
+      if (timerPopup && !timerPopup.classList.contains('hidden')) {
+        timerPopup.classList.add('hidden');
+        return;
+      }
+      closeFabMenu();
       closeSidebar();
       closeNotifications();
     }
@@ -101,6 +141,40 @@ function closeSidebar() {
 
 function closeNotifications() {
   document.querySelector('#notif-panel')?.classList.add('hidden');
+}
+
+function renderFabMenu() {
+  const menu = document.querySelector('#fab-menu');
+  if (!menu) return;
+  menu.innerHTML = `
+    <button class="fab-menu-item" type="button" data-fab-action="quick-task" data-i18n="fab_quick_task"><i data-lucide="zap"></i>${t('fab_quick_task')}</button>
+    <button class="fab-menu-item" type="button" data-fab-action="special-day" data-i18n="fab_special_day"><i data-lucide="calendar-heart"></i>${t('fab_special_day')}</button>
+  `;
+  refreshIcons();
+}
+
+function toggleFabMenu() {
+  const menu = document.querySelector('#fab-menu');
+  const fab = document.querySelector('#fab');
+  if (!menu) return;
+  const isOpen = menu.classList.toggle('hidden') === false;
+  fab?.setAttribute('aria-expanded', String(isOpen));
+}
+
+function closeFabMenu() {
+  const menu = document.querySelector('#fab-menu');
+  const fab = document.querySelector('#fab');
+  if (menu) menu.classList.add('hidden');
+  fab?.setAttribute('aria-expanded', 'false');
+}
+
+function handleFabMenuClick(event) {
+  const item = event.target.closest('[data-fab-action]');
+  if (!item) return;
+  closeFabMenu();
+  const action = item.dataset.fabAction;
+  if (action === 'quick-task') openQuickAdd();
+  if (action === 'special-day') openSpecialDayModal();
 }
 
 async function toggleNotifications() {
@@ -151,10 +225,11 @@ async function refreshCurrentView() {
   const [categories, tasks] = await Promise.all([getCategories(), getTasks()]);
   renderSidebar(categories, tasks, activeView);
   if (activeView === 'dashboard') await renderDashboard();
+  if (activeView === 'time') await renderTime(activeWindow);
   if (activeView === 'upcoming') await renderUpcoming();
   if (activeView === 'priority') await renderPriorityMatrix();
   if (activeView === 'done') await renderDone();
-  if (activeView === 'archive') await renderArchive();
+  if (activeView === 'archive') await renderArchive(activeWindow);
   if (activeView === 'settings') {
     await renderSettings();
     wireSettingsEvents();
@@ -223,6 +298,12 @@ function handleViewContentClick(event) {
     runSettingsAction(action);
     return;
   }
+  const windowTab = event.target.closest('[data-window]');
+  if (windowTab) {
+    activeWindow = windowTab.dataset.window;
+    refreshCurrentView();
+    return;
+  }
   const archiveRestore = event.target.closest('[data-archive-restore]');
   if (archiveRestore) {
     restoreTaskById(Number(archiveRestore.dataset.archiveRestore));
@@ -273,6 +354,11 @@ async function runSettingsAction(action) {
   if (key === 'pref-onboarding') {
     setPref('onboarding', !getNotifyPrefs().onboarding);
     updateSettingsSwitch(action, 'onboarding');
+    return;
+  }
+  if (key === 'pref-auto-pending') {
+    setPref('autoPending', !getNotifyPrefs().autoPending);
+    updateSettingsSwitch(action, 'autoPending');
     return;
   }
   if (key === 'edit-profile') {
@@ -330,6 +416,44 @@ async function runSettingsAction(action) {
     await refreshCurrentView();
     return;
   }
+  if (key === 'sync-save-link') {
+    const url = document.querySelector('#sync-url')?.value.trim() || '';
+    const key = document.querySelector('#sync-key')?.value.trim() || '';
+    saveSyncLink(url, key);
+    await refreshCurrentView();
+    return;
+  }
+  if (key === 'sync-copy-link') {
+    const link = getSavedSyncLink();
+    const url = link?.url || document.querySelector('#sync-url')?.value.trim() || '';
+    const key = link?.key || document.querySelector('#sync-key')?.value.trim() || '';
+    const text = [url, key].filter(Boolean).join('\n');
+    if (!text) return;
+    await copyTextToClipboard(text);
+    const btn = document.querySelector('[data-settings-action="sync-copy-link"]');
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = t('s_sync_link_copied');
+      setTimeout(() => { btn.textContent = original; }, 2000);
+    }
+    return;
+  }
+  if (key === 'sync-clear-link') {
+    clearSavedSyncLink();
+    await refreshCurrentView();
+    return;
+  }
+  if (key === 'sync-reconnect') {
+    const link = getSavedSyncLink();
+    if (!link || !link.url) return;
+    try {
+      await connectSync(link.url, link.key);
+    } catch (error) {
+      showSyncError(error.message || String(error));
+    }
+    await refreshCurrentView();
+    return;
+  }
   if (key === 'sync-copy-sql') {
     await copySyncSql(action);
     return;
@@ -344,14 +468,12 @@ async function runSettingsAction(action) {
     return;
   }
   if (key === 'bc-copy-id') {
-    try {
-      await navigator.clipboard.writeText(getDeviceId());
-      const btn = document.querySelector('[data-settings-action="bc-copy-id"]');
-      if (btn) {
-        btn.textContent = t('bc_copied');
-        setTimeout(() => { btn.textContent = t('bc_copy_id'); }, 1500);
-      }
-    } catch {}
+    await copyTextToClipboard(getDeviceId());
+    const btn = document.querySelector('[data-settings-action="bc-copy-id"]');
+    if (btn) {
+      btn.textContent = t('bc_copied');
+      setTimeout(() => { btn.textContent = t('bc_copy_id'); }, 1500);
+    }
     return;
   }
   if (key === 'bc-refresh') {
@@ -403,26 +525,36 @@ function resetDangerPanel() {
 }
 
 async function wipeAllData() {
-  await importData({ categories: [], templates: [], tasks: [], activities: [] });
+  await importData({ categories: [], templates: [], tasks: [], activities: [], history: [], special_days: [] });
   await seedDatabase();
   await pushAll();
   resetDangerPanel();
   await refreshCurrentView();
 }
 
-async function copySyncSql(action) {
+async function copyTextToClipboard(text) {
   try {
-    await navigator.clipboard.writeText(SCHEMA_SQL);
-  } catch {
-    const pre = document.querySelector('#sync-sql');
-    if (pre) {
-      const range = document.createRange();
-      range.selectNodeContents(pre);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
     }
-  }
+  } catch {}
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.setAttribute('readonly', '');
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch {}
+  textarea.remove();
+  return ok;
+}
+
+async function copySyncSql(action) {
+  await copyTextToClipboard(SCHEMA_SQL);
   const original = action.textContent;
   action.textContent = t('s_sync_sql_done');
   setTimeout(() => { action.textContent = original; }, 2000);
@@ -471,23 +603,18 @@ function handleSyncEvent(event) {
 function tickFocusTimers() {
   const now = Date.now();
   getTasks().then((tasks) => {
-    let changed = false;
     for (const task of tasks) {
-      if (!task.focusStartedAt || task.status === 'completed' || task.priority === 'pending' || task.deletedAt) continue;
-      const end = new Date(task.focusStartedAt).getTime() + (Number(task.focusMinutes) || 25) * 60000;
-      if (now >= end) {
-        sendToPending(task.id);
-        changed = true;
+      if (!task.focusStartedAt || task.status !== 'in_progress' || task.deletedAt) continue;
+      const end = new Date(task.focusStartedAt).getTime() + (Number(task.durationMinutes) || 25) * 60000;
+      if (now >= end && timerPopupShownFor.get(task.id) !== end) {
+        timerPopupShownFor.set(task.id, end);
+        openTimerPopup(task);
       }
     }
-    if (changed) {
-      window.refreshCurrentView();
-      return;
-    }
-    document.querySelectorAll('[data-focus-chip]').forEach((span) => {
-      const task = tasks.find((item) => String(item.id) === span.dataset.focusChip);
+    document.querySelectorAll('[data-timer-chip]').forEach((span) => {
+      const task = tasks.find((item) => String(item.id) === span.dataset.timerChip);
       if (!task?.focusStartedAt) return;
-      const end = new Date(task.focusStartedAt).getTime() + (Number(task.focusMinutes) || 25) * 60000;
+      const end = new Date(task.focusStartedAt).getTime() + (Number(task.durationMinutes) || 25) * 60000;
       span.textContent = formatFocusRemaining(end - now);
     });
   });

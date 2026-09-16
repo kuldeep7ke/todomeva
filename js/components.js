@@ -1,15 +1,22 @@
 ﻿import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask } from './db.js?v=7';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=5';
 import { createRecurringTaskInstance } from './recurrence.js?v=6';
-import { getLang, t } from './i18n.js?v=11';
+import { getLang, t } from './i18n.js?v=12';
 import { isPrefEnabled } from './prefs.js?v=4';
-import { pushDeletion } from './sync.js?v=8';
+import { pushDeletion } from './sync.js?v=9';
 import { getProfile, saveProfile } from './account.js?v=4';
+import { confirmDialog } from './dialog.js?v=1';
 
 let selectedCategoryId = null;
 
 export function icon(name) {
   return `<i data-lucide="${name}"></i>`;
+}
+
+export function formStateSnapshot(form) {
+  const entries = [];
+  new FormData(form).forEach((value, key) => entries.push([key, String(value)]));
+  return JSON.stringify(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 }
 
 export function refreshIcons() {
@@ -442,7 +449,7 @@ export async function restoreTaskById(id) {
 }
 
 export async function purgeTaskById(id) {
-  if (!confirm(t('delete_confirm'))) return;
+  if (!(await confirmDialog({ title: t('delete_task'), message: t('delete_confirm'), confirmText: t('delete_forever'), danger: true }))) return;
   const task = await getTask(id);
   await permanentDeleteTask(id);
   await pushDeletion('task', task?.uuid);
@@ -453,7 +460,7 @@ export async function emptyArchiveAll() {
   const tasks = await getTasks();
   const archived = tasks.filter((task) => task.deletedAt);
   if (!archived.length) return;
-  if (!confirm(t('empty_archive_confirm'))) return;
+  if (!(await confirmDialog({ title: t('empty_archive'), message: t('empty_archive_confirm'), confirmText: t('empty_archive'), danger: true }))) return;
   for (const task of archived) {
     await permanentDeleteTask(task.id);
     await pushDeletion('task', task.uuid);
@@ -486,7 +493,13 @@ async function renderQuickAddForm() {
   }
   body.onclick = handleQuickAddClick;
   const form = body.querySelector('#create-task-form');
-  if (form) form.addEventListener('submit', submitCreateTask);
+  const quickModal = document.querySelector('#quick-add-modal');
+  if (form) {
+    form.addEventListener('submit', submitCreateTask);
+    quickModal.dataset.formBaseline = formStateSnapshot(form);
+  } else {
+    delete quickModal.dataset.formBaseline;
+  }
   bindCategoryPickers(body);
   bindDatePickers(body);
   refreshIcons();
@@ -501,15 +514,30 @@ function clearQuickTask() {
   form.templateId.value = '';
 }
 
+async function closeIfDirty(modalId, closeFn) {
+  const modal = document.querySelector(modalId);
+  const baseline = modal?.dataset.formBaseline;
+  const form = modal?.querySelector('form');
+  const changed = Boolean(form && baseline && formStateSnapshot(form) !== baseline);
+  if (!changed) {
+    closeFn();
+    return;
+  }
+  if (await confirmDialog({ title: t('discard_changes'), message: t('modal_discard_confirm'), confirmText: t('discard_changes'), dismissText: t('cancel') })) closeFn();
+}
+
 async function handleQuickAddClick(event) {
   const close = event.target.closest('.close-modal-btn');
   const category = event.target.closest('[data-pick-category]');
   const cancel = event.target.closest('[data-cancel-modal]');
   const chipClear = event.target.closest('[data-template-clear]');
   const template = chipClear ? null : event.target.closest('[data-template]');
-  if (close) closeQuickAdd();
+  if (close) {
+    await closeIfDirty('#quick-add-modal', closeQuickAdd);
+    return;
+  }
   if (cancel) {
-    closeQuickAdd();
+    await closeIfDirty('#quick-add-modal', closeQuickAdd);
     return;
   }
   if (category) {
@@ -572,11 +600,13 @@ export async function openTaskDetail(id) {
     closeTaskModal();
     window.refreshCurrentView();
   });
-  document.querySelector('[data-close-task]').addEventListener('click', closeTaskModal);
-  document.querySelector('[data-cancel-modal]')?.addEventListener('click', closeTaskModal);
+  document.querySelector('[data-close-task]').addEventListener('click', () => closeIfDirty('#task-modal', closeTaskModal));
+  document.querySelector('[data-cancel-modal]')?.addEventListener('click', () => closeIfDirty('#task-modal', closeTaskModal));
   document.querySelector('[data-delete-task]').addEventListener('click', () => archiveTaskById(task.id));
   bindCategoryPickers(document.querySelector('#task-modal-body'));
   bindDatePickers(document.querySelector('#task-modal-body'));
+  const editForm = document.querySelector('#edit-task-form');
+  if (editForm) document.querySelector('#task-modal').dataset.formBaseline = formStateSnapshot(editForm);
   refreshIcons();
 }
 

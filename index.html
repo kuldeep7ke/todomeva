@@ -18,7 +18,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=21" />
+    <link rel="stylesheet" href="css/style.css?v=22" />
   </head>
   <body>
     <main id="landing-page" class="landing-page">
@@ -124,11 +124,15 @@
       <div id="onboarding-card" class="modal-card"></div>
     </div>
 
+    <div id="app-dialog" class="modal-backdrop hidden" role="alertdialog" aria-modal="true">
+      <div id="app-dialog-card" class="modal-card"></div>
+    </div>
+
     <input id="import-file" class="hidden" type="file" accept="application/json" />
 
     <script src="vendor/dexie.min.js"></script>
     <script src="vendor/lucide.min.js"></script>
     <script src="vendor/supabase.min.js"></script>
-    <script type="module" src="js/app.js?v=15"></script>
+    <script type="module" src="js/app.js?v=16"></script>
   </body>
 </html>

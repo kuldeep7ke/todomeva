@@ -79,6 +79,7 @@ todomeva/
 │   ├── reminder.js          #   Capacitor LocalNotifications bridge + web fallback
 │   ├── sync.js              #   opt-in Supabase sync engine + SCHEMA_SQL
 │   ├── broadcast.js         #   announcement pills + banner modal
+│   ├── dialog.js            #   in-app confirm dialog (replaces native confirm/alert)
 │   └── (seed, recurrence, i18n, prefs, account)
 ├── vendor/                  # local browser builds: dexie, lucide, supabase
 ├── supabase/schema.sql      # sync_docs DDL (embedded in sync.js too)

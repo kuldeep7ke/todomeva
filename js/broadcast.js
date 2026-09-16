@@ -1,4 +1,4 @@
-import { t } from './i18n.js?v=11';
+import { t } from './i18n.js?v=12';
 
 // Live broadcast toasts + promo banner, delivered from jsonbin.io bins.
 // Any authorized third-party site can edit the bins on jsonbin.io and the

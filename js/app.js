@@ -1,12 +1,13 @@
 import { exportData, getCategories, getTasks, importData, seedDatabase, sendToPending } from './db.js?v=7';
-import { archiveTaskById, closeQuickAdd, emptyArchiveAll, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=12';
-import { renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=18';
+import { archiveTaskById, closeQuickAdd, emptyArchiveAll, formStateSnapshot, openQuickAdd, openTaskDetail, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=13';
+import { renderBasics, renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderRecommended, renderSettings, renderUpcoming, renderNotificationsPanel, updateNotifBadge, updateSyncStatusUI } from './views.js?v=19';
 import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=7';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=4';
 import { saveProfile } from './account.js?v=4';
-import { initLang, setLang, t } from './i18n.js?v=11';
-import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=8';
-import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=4';
+import { initLang, setLang, t } from './i18n.js?v=12';
+import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL } from './sync.js?v=9';
+import { confirmDialog, isDialogOpen } from './dialog.js?v=1';
+import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=5';
 
 let activeView = 'dashboard';
 let initPromise = null;
@@ -45,7 +46,7 @@ async function initApp() {
 }
 
 async function autoConnect() {
-  const { autoConnect: connect } = await import('./sync.js?v=8');
+  const { autoConnect: connect } = await import('./sync.js?v=9');
   await connect();
 }
 
@@ -60,8 +61,8 @@ function wireGlobalEvents() {
   document.querySelector('#sidebar').addEventListener('click', handleSidebarClick);
   document.querySelector('#view-content').addEventListener('click', handleViewContentClick);
   document.querySelector('#view-content').addEventListener('submit', handleViewContentSubmit);
-  document.querySelector('#quick-add-modal').addEventListener('click', (event) => { if (event.target.id === 'quick-add-modal') closeQuickAdd(); });
-  document.querySelector('#task-modal').addEventListener('click', (event) => { if (event.target.id === 'task-modal') closeTaskModal(); });
+  document.querySelector('#quick-add-modal').addEventListener('click', (event) => { if (event.target.id === 'quick-add-modal') guardModalClose('#quick-add-modal', closeQuickAdd); });
+  document.querySelector('#task-modal').addEventListener('click', (event) => { if (event.target.id === 'task-modal') guardModalClose('#task-modal', closeTaskModal); });
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.notif-wrap')) closeNotifications();
   });
@@ -71,7 +72,16 @@ function wireGlobalEvents() {
       openQuickAdd();
     }
     if (event.key === 'Escape') {
-      closeQuickAdd();
+      const quickModal = document.querySelector('#quick-add-modal');
+      const taskModal = document.querySelector('#task-modal');
+      if (!quickModal.classList.contains('hidden')) {
+        guardModalClose('#quick-add-modal', closeQuickAdd);
+        return;
+      }
+      if (!taskModal.classList.contains('hidden')) {
+        guardModalClose('#task-modal', closeTaskModal);
+        return;
+      }
       closeSidebar();
       closeNotifications();
     }
@@ -118,6 +128,25 @@ function closeTaskModal() {
   document.querySelector('#task-modal').classList.add('hidden');
 }
 
+async function guardModalClose(modalId, closeFn) {
+  if (isDialogOpen()) return;
+  const modal = document.querySelector(modalId);
+  const baseline = modal?.dataset.formBaseline;
+  const form = modal?.querySelector('form');
+  const changed = Boolean(form && baseline && formStateSnapshot(form) !== baseline);
+  if (!changed) {
+    closeFn();
+    return;
+  }
+  const shouldDiscard = await confirmDialog({
+    title: t('discard_changes'),
+    message: t('modal_discard_confirm'),
+    confirmText: t('discard_changes'),
+    dismissText: t('cancel')
+  });
+  if (shouldDiscard) closeFn();
+}
+
 async function refreshCurrentView() {
   const [categories, tasks] = await Promise.all([getCategories(), getTasks()]);
   renderSidebar(categories, tasks, activeView);
@@ -130,6 +159,8 @@ async function refreshCurrentView() {
     await renderSettings();
     wireSettingsEvents();
   }
+  if (activeView === 'basics') await renderBasics();
+  if (activeView === 'recommended') await renderRecommended();
   if (activeView.startsWith('category:')) await renderCategory(activeView.split(':')[1]);
   refreshIcons();
   updateNotifBadge();
@@ -263,6 +294,22 @@ async function runSettingsAction(action) {
   }
   if (key === 'open-landing') {
     window.__backToLanding();
+    return;
+  }
+  if (key === 'nav-dashboard') {
+    navigateTo('dashboard');
+    return;
+  }
+  if (key === 'nav-settings') {
+    navigateTo('settings');
+    return;
+  }
+  if (key === 'nav-basics') {
+    navigateTo('basics');
+    return;
+  }
+  if (key === 'nav-recommended') {
+    navigateTo('recommended');
     return;
   }
   if (key === 'export') {

@@ -1,12 +1,12 @@
 import { addTask, getCategories, getTasks, localDateStr } from './db.js?v=7';
-import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=12';
-import { t } from './i18n.js?v=11';
-import { getLang, getLangs } from './i18n.js?v=11';
-import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=4';
+import { attachTaskCardEvents, bindCategoryPickers, icon, priorityOptions, renderCategoryPicker, renderPicker, renderTaskCard, refreshIcons } from './components.js?v=13';
+import { t } from './i18n.js?v=12';
+import { getLang, getLangs } from './i18n.js?v=12';
+import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=5';
 import { getNotifyPrefs } from './prefs.js?v=4';
 import { getProfile } from './account.js?v=4';
 import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=7';
-import { getLastUrl, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=8';
+import { getLastUrl, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=9';
 
 export async function renderDashboard() {
   const { categories, tasks, categoryMap } = await loadViewData();
@@ -178,6 +178,9 @@ export async function renderSettings() {
             <button class="btn btn-primary" type="button" data-settings-action="profile-save">${t('s_profile_save')}</button>
           </div>
         </form>
+      `)}
+      ${settingsCard('s_navigation', 's_navigation_desc', `
+        ${settingsRow('layout-dashboard', 's_back_dashboard', 's_back_dashboard_desc', `<button class="btn btn-ghost icon-btn" data-settings-action="nav-dashboard" aria-label="${t('s_back_dashboard')}">${icon('arrow-right')}</button>`)}
         ${settingsRow('home', 's_open_landing', 's_open_landing_desc', `<button class="btn btn-ghost icon-btn" data-settings-action="open-landing" aria-label="${t('s_open_landing')}">${icon('arrow-up-right')}</button>`)}
       `)}
       ${settingsCard('s_appearance', 's_appearance_desc', `
@@ -263,6 +266,10 @@ export async function renderSettings() {
             <button class="btn btn-ghost" data-settings-action="danger-cancel">${t('s_profile_cancel')}</button>
           </div>
         </div>
+      `)}
+      ${settingsCard('s_guides', 's_guides_desc', `
+        ${settingsRow('book-open', 'guide_basics', 'guide_basics_desc', `<button class="btn btn-ghost icon-btn" data-settings-action="nav-basics" aria-label="${t('guide_basics')}">${icon('chevron-right')}</button>`)}
+        ${settingsRow('sparkles', 'guide_recommended', 'guide_recommended_desc', `<button class="btn btn-ghost icon-btn" data-settings-action="nav-recommended" aria-label="${t('guide_recommended')}">${icon('chevron-right')}</button>`)}
       `)}
       ${settingsCard('s_about', 's_about_desc', `
         ${settingsRow('shield', 's_privacy', 's_privacy_desc', '<span class="muted settings-check">Local by default</span>')}
@@ -407,4 +414,54 @@ function notifMeta(due, today) {
   if (due === addDaysDateStr(1)) return t('notif_tomorrow');
   const days = Math.max(2, Math.round((new Date(due + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000));
   return t('notif_in_days').replace('{n}', days);
+}
+
+export async function renderBasics() {
+  const content = document.querySelector('#view-content');
+  content.innerHTML = `
+    <div class="grid settings-grid settings-grid-full">
+      <section class="card">
+        <div class="settings-card-header"><div><h3>${t('guide_basics_title')}</h3><p class="muted">${t('guide_basics_intro')}</p></div></div>
+        <div class="settings-list">
+          <ol class="guide-list">
+            <li>${t('guide_basics_1')}</li>
+            <li>${t('guide_basics_2')}</li>
+            <li>${t('guide_basics_3')}</li>
+            <li>${t('guide_basics_4')}</li>
+            <li>${t('guide_basics_5')}</li>
+            <li>${t('guide_basics_6')}</li>
+          </ol>
+          <div class="guide-actions">
+            <button class="btn btn-ghost" data-settings-action="nav-settings">${t('s_guide_back')}</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+  refreshIcons();
+}
+
+export async function renderRecommended() {
+  const content = document.querySelector('#view-content');
+  content.innerHTML = `
+    <div class="grid settings-grid settings-grid-full">
+      <section class="card">
+        <div class="settings-card-header"><div><h3>${t('guide_recommended_title')}</h3><p class="muted">${t('guide_recommended_intro')}</p></div></div>
+        <div class="settings-list">
+          <ol class="guide-list">
+            <li>${t('guide_recommended_1')}</li>
+            <li>${t('guide_recommended_2')}</li>
+            <li>${t('guide_recommended_3')}</li>
+            <li>${t('guide_recommended_4')}</li>
+            <li>${t('guide_recommended_5')}</li>
+            <li>${t('guide_recommended_6')}</li>
+          </ol>
+          <div class="guide-actions">
+            <button class="btn btn-ghost" data-settings-action="nav-settings">${t('s_guide_back')}</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+  refreshIcons();
 }

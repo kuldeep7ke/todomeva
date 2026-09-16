@@ -8,7 +8,7 @@ Last updated: 2026-09-15
 
 Todo Meva is an offline-first vanilla JavaScript to-do/productivity SPA. Dexie (IndexedDB) for local persistence, an opt-in sync engine against a *user-owned* Supabase project, Lucide icons, a warm flat UI with 3 brand palettes, trilingual i18n (English / मराठी / हिंदी), recurrent tasks, reminders, remote broadcasts, and an Android APK (Capacitor 8).
 
-**Current shape:** Landing page → 4 views (Dashboard, Upcoming, Category, Priority Matrix) + 8-section Settings; topbar theme toggle + notification bell; quick-add (Ctrl+K / FAB); recurring tasks; reminders (native on Android, Web Notifications in browser); export/import; opt-in sync; jsonbin broadcasts via a Cloudflare edge-cached proxy.
+**Current shape:** Landing page → 4 views (Dashboard, Upcoming, Category, Priority Matrix) + 11-section Settings (incl. Navigation + Help & Guides); topbar theme toggle + notification bell; quick-add (Ctrl+K / FAB); recurring tasks; reminders (native on Android, Web Notifications in browser); export/import; opt-in sync; jsonbin broadcasts via a Cloudflare edge-cached proxy.
 
 **Delivered surfaces:** GitHub Pages, Cloudflare Pages (with edge-cached `/api/announcements`), and Android debug APK built by GitHub Actions.
 
@@ -25,7 +25,7 @@ Todo Meva is an offline-first vanilla JavaScript to-do/productivity SPA. Dexie (
 7. **Dev server**: `start.bat` → Python `http.server` on :8400
 8. **Dependencies**: Vendored local browser builds (Dexie + Lucide + Supabase JS)
 9. **Palette**: Warm productivity (off-white bg, orange accent, charcoal text)
-10. **Settings**: One scrolling page, 8 section cards (~not sub-view navigation)
+10. **Settings**: One scrolling page, 11 section cards (Account, Navigation, Appearance, Language, Notifications & Popups, Broadcasts, Multi-Device Sync, Data, Danger Zone, Help & Guides, About); Navigation + Help & Guides sub-views (Basics / Recommended)
 11. **i18n**: Trilingual from day one (en / mr / hi), `data-i18n` + runtime `t()`
 12. **Brand palettes**: Accent swaps via `[data-brand]` CSS overrides (Orange default, Blue, Emerald)
 13. **Sync**: Bring-your-own Supabase — no vendor account; URL + anon key pasted at runtime
@@ -114,13 +114,13 @@ No circular dependencies.
 
 Every file loads with `?v=N` because of browser caching. **Rule:** when you edit a module bump its `?v=` in every importer; when you edit CSS/HTML bump it in `index.html`.
 
-Current versions (2026-09-15):
-- `index.html` loads `style.css?v=21`, `js/app.js?v=15`
-- `app.js`: `db?v=7`, `components?v=12`, `views?v=18`, `reminder?v=7`, `prefs?v=4`, `account?v=4`, `i18n?v=11`, `sync?v=8`, `broadcast?v=4`
-- `views.js`: `db?v=7`, `components?v=12`, `i18n?v=11`, `broadcast?v=4`, `prefs?v=4`, `account?v=4`, `reminder?v=7`, `sync?v=8`
-- `components.js`: `db?v=7`, `seed?v=5`, `recurrence?v=6`, `i18n?v=11`, `prefs?v=4`, `sync?v=8`, `account?v=4`
+Current versions (2026-09-16):
+- `index.html` loads `style.css?v=22`, `js/app.js?v=16`
+- `app.js`: `db?v=7`, `components?v=13`, `views?v=19`, `reminder?v=7`, `prefs?v=4`, `account?v=4`, `i18n?v=12`, `sync?v=9`, `dialog?v=1`, `broadcast?v=5`
+- `views.js`: `db?v=7`, `components?v=13`, `i18n?v=12`, `broadcast?v=5`, `prefs?v=4`, `account?v=4`, `reminder?v=7`, `sync?v=9`
+- `components.js`: `db?v=7`, `seed?v=5`, `recurrence?v=6`, `i18n?v=12`, `prefs?v=4`, `sync?v=9`, `account?v=4`, `dialog?v=1`
 - `reminder.js`: `db?v=7`, `prefs?v=4`
-- `sync.js` / `recurrence.js`: `db?v=7`; `broadcast.js`: `i18n?v=11`; `db.js`: `seed?v=5`
+- `sync.js` / `recurrence.js`: `db?v=7`; `broadcast.js` / `dialog.js`: `i18n?v=12`; `db.js`: `seed?v=5`
 
 ---
 
@@ -178,7 +178,7 @@ Orange is default. Blue / Emerald swap accents via `[data-brand]` CSS overrides 
 - [x] Sidebar slide-in with backdrop; wrapping topbar; badge below title; bottom-sheet modals; single-column quick create; compact category/info cards; centered FAB; stacked footer; 2-column stats; compact hero
 
 ### Phase 6 — Settings & personalization
-- [x] 8 section cards: Account (name/email/contact), Appearance (dark + 3 palettes), Language (en/mr/hi), Notifications & Popups (toggles + live permission status), Multi-Device Sync (connect/sync/disconnect + SQL), Data (export/import), Danger Zone (type DELETE / reset prefs), About
+- [x] 11 section cards: Account (name/email/contact), Navigation (Back to Dashboard / Open Landing Page), Appearance (dark + 3 palettes), Language (en/mr/hi), Notifications & Popups (toggles + live permission status), Broadcasts (device id + status), Multi-Device Sync (connect/sync/disconnect + SQL), Data (export/import), Danger Zone (type DELETE / reset prefs), Help & Guides (Basics / Recommended), About
 
 ### Phase 7 — i18n & brand palettes
 - [x] Full trilingual coverage; `data-i18n` + `t()`; 3 brand palettes with dark variants
@@ -228,7 +228,7 @@ node scripts/update-android-version.cjs
 ```
 
 ### Quick browser checks
-1. Launch renders dashboard; 2. sidebar counts show; 3. theme/brand/lang persist; 4. Ctrl+K / FAB opens Quick Add, X/Cancel closes; 5. quick create adds a task; 6. task card opens edit modal; 7. status checkbox cycles; 8. export downloads JSON; 9. Settings renders 8 sections + Broadcasts status; 10. sync: invalid URL → persistent validation error; unreachable host → fetch error without breaking Settings; 11. Settings width matches dashboard panel; 12. Danger Zone rows share 12px padding + 8px gap; 13. granted notification permission → "Status: Enabled" (not "Off + Enable"); Enable button only when requestable.
+1. Launch renders dashboard; 2. sidebar counts show; 3. theme/brand/lang persist; 4. Ctrl+K / FAB opens Quick Add, X/Cancel closes; 5. quick create adds a task; 6. task card opens edit modal; 7. status checkbox cycles; 8. export downloads JSON; 9. Settings renders 11 sections; Navigation actions (Back to Dashboard / Open Landing Page) + Help & Guides sub-views (Basics / Recommended) work; 10. sync: invalid URL → persistent validation error; unreachable host → fetch error without breaking Settings; 11. Settings width matches dashboard panel; 12. Danger Zone rows share 12px padding + 8px gap; 13. granted notification permission → "Status: Enabled" (not "Off + Enable"); Enable button only when requestable.
 
 ### Android checks
 Local + CI build succeed; APK title "Todo Meva"; native reminder scheduling fires once; sync/broadcasts reach the WebView (CORS `*`).

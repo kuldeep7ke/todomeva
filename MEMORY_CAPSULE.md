@@ -53,13 +53,13 @@ Repo is **public** (`kuldeep7ke/todomeva`, branch `main`). No secrets live in th
 
 Every file loads with a `?v=N` query param because of browser caching. **When you edit a module, bump its `?v=` in every importer** (and in `index.html` for CSS/entry JS).
 
-Current versions (verified 2026-09-15):
-- `index.html`: `css/style.css?v=21`, `js/app.js?v=15`
-- `app.js` imports: `db?v=7`, `components?v=12`, `views?v=18`, `reminder?v=7`, `prefs?v=4`, `account?v=4`, `i18n?v=11`, `sync?v=8`, `broadcast?v=4`
-- `views.js` imports: `db?v=7`, `components?v=12`, `i18n?v=11`, `broadcast?v=4`, `prefs?v=4`, `account?v=4`, `reminder?v=7`, `sync?v=8`
-- `components.js` imports: `db?v=7`, `seed?v=5`, `recurrence?v=6`, `i18n?v=11`, `prefs?v=4`, `sync?v=8`, `account?v=4`
+Current versions (verified 2026-09-16):
+- `index.html`: `css/style.css?v=22`, `js/app.js?v=16`
+- `app.js` imports: `db?v=7`, `components?v=13`, `views?v=19`, `reminder?v=7`, `prefs?v=4`, `account?v=4`, `i18n?v=12`, `sync?v=9`, `dialog?v=1`, `broadcast?v=5`
+- `views.js` imports: `db?v=7`, `components?v=13`, `i18n?v=12`, `broadcast?v=5`, `prefs?v=4`, `account?v=4`, `reminder?v=7`, `sync?v=9`
+- `components.js` imports: `db?v=7`, `seed?v=5`, `recurrence?v=6`, `i18n?v=12`, `prefs?v=4`, `sync?v=9`, `account?v=4`, `dialog?v=1`
 - `reminder.js` imports: `db?v=7`, `prefs?v=4`
-- `sync.js` / `recurrence.js` / `broadcast.js` import `db?v=7` / `i18n?v=11`
+- `sync.js` / `recurrence.js` import `db?v=7`; `broadcast.js` / `dialog.js` import `i18n?v=12`
 - `db.js` imports `seed?v=5`
 
 ---
@@ -175,18 +175,22 @@ Activity types: `task_created`, `task_completed`, `task_deleted`, `task_updated`
 Single table, user-owned project. Run `supabase/schema.sql` (or `SCHEMA_SQL` from `sync.js`) once in the Supabase SQL Editor:
 
 ```sql
-create table sync_docs (
-  id text primary key,          -- 'entity:<uuid>' e.g. 'task:9f3a…'
-  entity text not null,         -- category | template | task | activity
-  data jsonb not null,
-  updated_at timestamptz not null default now()
+create table if not exists public.sync_docs (
+  id text primary key,            -- 'entity:<uuid>' e.g. 'task:9f3a…'
+  entity text not null default '',-- category | template | task | activity
+  data jsonb not null default '{}',
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
--- indexes on (entity) and (updated_at)
--- RLS enabled, policy sync_docs_anon_all (for all, to anon, using true)
+create index if not exists sync_docs_entity_idx on public.sync_docs (entity);
+create index if not exists sync_docs_updated_at_idx on public.sync_docs (updated_at);
+alter table public.sync_docs enable row level security;
+-- grants to anon + authenticated
+-- policy sync_docs_anon_all (for all, to anon, using true)
 -- added to publication supabase_realtime
 ```
 
-Security note: anon has full access by design — acceptable only because each user connects their own private project.
+Security note: anon has full access by design — acceptable only because each user connects their own private project. Verified live: this DDL (and the grants/policies/publication in `supabase/schema.sql`) round-trips through the Web client with the publishable/anon key.
 
 ---
 
@@ -250,12 +254,12 @@ Tokens: card radius 22px, task cards 18px, buttons/badges 999px; shadow `0 18px 
 - Responsive: desktop side-by-side, tablet overlay sidebar, mobile full-screen.
 - Onboarding card on first visit: name (required) + optional contact, no login; Save or Skip (toggleable via prefs).
 
-### Views (4 + Settings)
+### Views (4 + Settings + 2 guide sub-views)
 1. **Dashboard** — stats, quick-create form, overdue/today/open sections
 2. **Upcoming** — future dated tasks, 30 days
 3. **Category** — tasks filtered by category
 4. **Priority Matrix** — high/medium/low/pending columns
-5. **Settings** — single scrolling page, 8 section cards (Account, Appearance, Language, Notifications & Popups, Multi-Device Sync, Data, Danger Zone, About) + Broadcasts status row
+5. **Settings** — single scrolling page, 11 section cards (Account, Navigation, Appearance, Language, Notifications & Popups, Broadcasts, Multi-Device Sync, Data, Danger Zone, Help & Guides, About). Navigation has "Back to Dashboard" / "Open Landing Page" actions; Help & Guides renders Basics (`renderBasics`) and Recommended (`renderRecommended`) as sub-views with a "Back to Settings" button; Danger Zone "Clear all data" uses a type-`DELETE` inline confirm, other destructive rows (delete-forever, empty archive) use the in-app `confirmDialog`.
 
 ### Tasks
 - Quick Add (Ctrl+K or FAB): category grid → template chips → two-step form
@@ -343,7 +347,7 @@ node scripts/update-android-version.cjs
 ```
 
 ### Quick browser checks
-1. Launch renders dashboard, not a blank shell; 2. sidebar category counts show; 3. theme/brand/lang persist after refresh; 4. Ctrl+K / FAB opens Quick Add, X and Cancel close it; 5. dashboard quick create adds a task; 6. task card opens edit modal; 7. status checkbox cycles state; 8. export downloads JSON; 9. Settings renders 8 sections + Broadcasts status; 10. invalid sync URL shows persistent validation message; unreachable host surfaces a fetch error without breaking Settings; 11. Settings top edge aligns with dashboard (same `.main-panel` width); 12. Danger Zone rows: 12px padding + 8px gap; 13. notifications: granted → status row reads Enabled (not "Off + Enable"); Enable button only when requestable.
+1. Launch renders dashboard, not a blank shell; 2. sidebar category counts show; 3. theme/brand/lang persist after refresh; 4. Ctrl+K / FAB opens Quick Add, X and Cancel close it; 5. dashboard quick create adds a task; 6. task card opens edit modal; 7. status checkbox cycles state; 8. export downloads JSON; 9. Settings renders 11 sections; Navigation actions (Back to Dashboard / Open Landing Page) + Help & Guides sub-views (Basics / Recommended) work; 10. invalid sync URL shows persistent validation message; unreachable host surfaces a fetch error without breaking Settings; 11. Settings top edge aligns with dashboard (same `.main-panel` width); 12. Danger Zone rows: 12px padding + 8px gap; type-DELETE confirm enables "Clear all data"; 13. notifications: granted → status row reads Enabled (not "Off + Enable"); Enable button only when requestable.
 
 ### Android smoke checks
 1. `npm run build && npx cap sync android` then `assembleDebug` succeeds locally and in CI; 2. APK shows app name "Todo Meva"; 3. reminders schedule natively (Capacitor) and fire once; 4. sync config + broadcast pills work from the APK WebView (CORS `*` on the proxy).
@@ -377,7 +381,7 @@ node scripts/update-android-version.cjs
 | 10 | Palette | Warm productivity (orange accent) |
 | 11–12 | Reminder UI / run check | Topbar bell; verified on :8400 |
 | 13 | DB upgrades | v2 → v3 adds `uuid` to all tables (stable identity for sync) |
-| 14 | Settings | Full 8-section single page |
+| 14 | Settings | Full 11-section single page (incl. Navigation + Help & Guides) |
 | 15 | i18n | Trilingual from day one (`data-i18n` + `t()`) |
 | 16 | Brand palettes | Accent swaps via `[data-brand]` CSS overrides |
 | 17–19 | Sync | Bring-your-own Supabase; `sync_docs` keyed `entity:<uuid>`; anon access accepted (user-owned project) |

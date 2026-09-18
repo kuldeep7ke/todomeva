@@ -18,8 +18,7 @@ let timerPopupShownFor = new Map();
 window.__enterApp = function enterApp() {
   document.querySelector('#landing-page').classList.add('hidden');
   document.querySelector('#app-shell').classList.remove('hidden');
-  showSplash();
-  initApp().finally(hideSplash);
+  initApp();
 };
 
 window.__backToLanding = function backToLanding() {
@@ -30,10 +29,14 @@ window.__backToLanding = function backToLanding() {
 window.refreshCurrentView = refreshCurrentView;
 window.navigateTo = navigateTo;
 
-document.querySelectorAll('[data-enter-app]').forEach((button) => button.addEventListener('click', window.__enterApp));
+function hideSplash() {
+  const splash = document.querySelector('#splash-screen');
+  if (splash) splash.classList.add('hidden');
+}
 
-const isReturningUser = Boolean(localStorage.getItem('todoMeva_lang'));
-if (isReturningUser) window.__enterApp();
+function showLanding() {
+  document.querySelector('#landing-page').classList.remove('hidden');
+}
 
 async function initApp() {
   if (initPromise) return initPromise;
@@ -53,15 +56,27 @@ async function initApp() {
   return initPromise;
 }
 
-function showSplash() {
-  const splash = document.querySelector('#splash-screen');
-  if (splash) splash.classList.remove('hidden');
-}
+// Boot: splash is visible from page load; keep it up while the app initializes so
+// startup always shows the loader (NewsMeva-style minimum ~1.8s).
+document.querySelectorAll('[data-enter-app]').forEach((button) => button.addEventListener('click', window.__enterApp));
 
-function hideSplash() {
-  const splash = document.querySelector('#splash-screen');
-  if (splash) splash.classList.add('hidden');
-}
+const isReturningUser = Boolean(localStorage.getItem('todoMeva_lang'));
+
+setTimeout(async () => {
+  try {
+    if (isReturningUser) {
+      await window.__enterApp();
+      await initApp();
+    } else {
+      showLanding();
+      refreshIcons();
+    }
+  } catch (error) {
+    console.error('Boot failed:', error);
+    showLanding();
+  }
+  hideSplash();
+}, 1800);
 
 async function autoPendOverdue() {
   if (!getNotifyPrefs().autoPending) return;

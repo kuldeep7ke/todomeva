@@ -18,7 +18,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=25" />
+    <link rel="stylesheet" href="css/style.css?v=26" />
   </head>
   <body>
     <main id="landing-page" class="landing-page">
@@ -86,6 +86,15 @@
       </footer>
     </main>
 
+    <div id="splash-screen" class="splash-screen hidden">
+      <div class="splash-inner">
+        <div class="splash-logo-wrap"><img src="assets/logo.svg" alt="" class="splash-logo" width="80" height="80"/></div>
+        <p class="splash-name">Todo Meva</p>
+        <div class="splash-bar"><div class="splash-bar-fill"></div></div>
+        <p class="splash-hint">Loading your tasks…</p>
+      </div>
+    </div>
+
     <div id="app-shell" class="app-shell hidden">
       <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
       <aside id="sidebar" class="sidebar"></aside>
@@ -146,6 +155,6 @@
     <script src="vendor/dexie.min.js"></script>
     <script src="vendor/lucide.min.js"></script>
     <script src="vendor/supabase.min.js"></script>
-    <script type="module" src="js/app.js?v=21"></script>
+    <script type="module" src="js/app.js?v=22"></script>
   </body>
 </html>

@@ -20,7 +20,7 @@ export function icon(name) {
 export function formStateSnapshot(form) {
   const entries = [];
   new FormData(form).forEach((value, key) => entries.push([key, String(value)]));
-  return JSON.stringify(entries.sort((a, b) => (a[0] < b[0] ? -i : a[0] > b[0] ? i : 0)));
+  return JSON.stringify(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 }
 
 export function refreshIcons() {
@@ -116,16 +116,16 @@ function intlLocale() {
 function formatDateLabel(value) {
   if (!value) return '';
   const [year, month, day] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - i, day));
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
 }
 
 function calMonthTitle(year, month) {
-  return `${new Intl.DateTimeFormat(intlLocale(), { month: 'long' }).format(new Date(year, month, i))} ${year}`;
+  return `${new Intl.DateTimeFormat(intlLocale(), { month: 'long' }).format(new Date(year, month, 1))} ${year}`;
 }
 
 function calWeekdayNames() {
   const names = [];
-  for (let index = 0; index < 7; index += i) {
+  for (let index = 0; index < 7; index += 1) {
     const label = new Intl.DateTimeFormat(intlLocale(), { weekday: 'narrow' }).format(new Date(2026, 0, 4 + index));
     names.push(label);
   }
@@ -133,15 +133,15 @@ function calWeekdayNames() {
 }
 
 function calGrid(year, month, selectedValue) {
-  const first = new Date(year, month, i).getDay();
-  const daysInMonth = new Date(year, month + i, 0).getDate();
+  const first = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
-  for (let index = 0; index < 42; index += i) {
-    const day = index - first + i;
-    if (day < i || day > daysInMonth) {
+  for (let index = 0; index < 42; index += 1) {
+    const day = index - first + 1;
+    if (day < 1 || day > daysInMonth) {
       cells.push('<span class="cal-day empty"></span>');
     } else {
-      const value = `${year}-${String(month + i).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const value = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const today = value === localDateStr();
       const selected = value === selectedValue;
       cells.push(`<button type="button" class="cal-day${selected ? ' selected' : ''}${today ? ' today' : ''}" data-cal-day="${value}" data-year="${year}" data-month="${month}" data-day="${day}">${day}</button>`);
@@ -193,7 +193,7 @@ function refreshCalView(picker) {
 export function bindDatePickers(root = document) {
   root.querySelectorAll('[data-date-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
-    picker.dataset.bound = 'i';
+    picker.dataset.bound = '1';
     const trigger = picker.querySelector('[data-date-trigger]');
     const menu = picker.querySelector('[data-date-menu]');
     trigger.addEventListener('click', (event) => {
@@ -211,11 +211,11 @@ export function bindDatePickers(root = document) {
       const clear = event.target.closest('[data-cal-clear]');
       const day = event.target.closest('[data-cal-day]');
       if (prev || next) {
-        const offset = prev ? -i : i;
+        const offset = prev ? -1 : 1;
         let year = Number(menu.dataset.calYear);
         let month = Number(menu.dataset.calMonth) + offset;
-        if (month < 0) { month = 11; year -= i; }
-        if (month > 11) { month = 0; year += i; }
+        if (month < 0) { month = 11; year -= 1; }
+        if (month > 11) { month = 0; year += 1; }
         menu.dataset.calYear = year;
         menu.dataset.calMonth = month;
         refreshCalView(picker);
@@ -237,7 +237,7 @@ export function bindDatePickers(root = document) {
 export function bindCategoryPickers(root = document) {
   root.querySelectorAll('[data-cat-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
-    picker.dataset.bound = 'i';
+    picker.dataset.bound = '1';
     picker.querySelector('[data-cat-trigger]').addEventListener('click', (event) => {
       event.stopPropagation();
       const menu = picker.querySelector('[data-cat-menu]');
@@ -326,7 +326,7 @@ document.querySelectorAll('.modal-card').forEach((card) => card.addEventListener
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
   const countByCategory = tasks.reduce((counts, task) => {
-    if (task.status !== 'done' && task.status !== 'pending' && !task.deletedAt) counts[task.categoryId] = (counts[task.categoryId] || 0) + i;
+    if (task.status !== 'done' && task.status !== 'pending' && !task.deletedAt) counts[task.categoryId] = (counts[task.categoryId] || 0) + 1;
     return counts;
   }, {});
   const archivedCount = tasks.filter((task) => task.deletedAt).length;
@@ -607,7 +607,7 @@ async function handleQuickAddClick(event) {
     template.classList.add('active');
     const clearEl = document.createElement('span');
     clearEl.className = 'template-chip-clear';
-    clearEl.dataset.templateClear = 'i';
+    clearEl.dataset.templateClear = '1';
     clearEl.setAttribute('role', 'button');
     clearEl.setAttribute('aria-label', t('clear_quick_task'));
     clearEl.innerHTML = icon('x');
@@ -847,7 +847,7 @@ export async function openTimerPopup(task) {
       await setTaskStatus(task.id, 'done', 'timer_done');
       if (task.recurrence !== 'none') await createRecurringTaskInstance(task);
     } else if (choice === 'extend') {
-      const minutes = Math.max(i, Number(task.durationMinutes) || 25) + 25;
+      const minutes = Math.max(1, Number(task.durationMinutes) || 25) + 25;
       await updateTask(task.id, { durationMinutes: minutes });
       await startFocus(task.id);
     } else if (choice === 'pending') {
@@ -900,7 +900,7 @@ export function showOnboarding() {
       </div>
     </form>`;
   const finish = () => {
-    localStorage.setItem('todoMeva_onboarded', 'i');
+    localStorage.setItem('todoMeva_onboarded', '1');
     overlay.classList.add('hidden');
   };
   card.querySelector('#onboarding-form').addEventListener('submit', (event) => {

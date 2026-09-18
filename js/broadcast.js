@@ -298,7 +298,7 @@ function showBanner(b) {
   };
 
   const timer = setInterval(() => {
-    countdown -= i;
+    countdown -= 1;
     if (countdown <= 0) {
       clearInterval(timer);
       finish();

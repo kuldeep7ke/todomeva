@@ -18,7 +18,8 @@ let timerPopupShownFor = new Map();
 window.__enterApp = function enterApp() {
   document.querySelector('#landing-page').classList.add('hidden');
   document.querySelector('#app-shell').classList.remove('hidden');
-  initApp();
+  showSplash();
+  initApp().finally(hideSplash);
 };
 
 window.__backToLanding = function backToLanding() {
@@ -50,6 +51,16 @@ async function initApp() {
     autoPendOverdue();
   })();
   return initPromise;
+}
+
+function showSplash() {
+  const splash = document.querySelector('#splash-screen');
+  if (splash) splash.classList.remove('hidden');
+}
+
+function hideSplash() {
+  const splash = document.querySelector('#splash-screen');
+  if (splash) splash.classList.add('hidden');
 }
 
 async function autoPendOverdue() {

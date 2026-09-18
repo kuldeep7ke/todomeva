@@ -193,7 +193,7 @@ function doneGroups(tasks) {
     const date = (task.completedAt || '').slice(0, 10);
     if (!date || date < weekStart) buckets[2].items.push(task);
     else if (date === today) buckets[0].items.push(task);
-    else buckets[i].items.push(task);
+    else buckets[1].items.push(task);
   }
   return buckets.filter((bucket) => bucket.items.length > 0);
 }
@@ -201,7 +201,7 @@ function doneGroups(tasks) {
 function startOfWeekDateStr() {
   const date = new Date();
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-  const month = String(date.getMonth() + i).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
 }
@@ -504,7 +504,7 @@ function notifItem(task, category, meta) {
 function addDaysDateStr(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  const month = String(date.getMonth() + i).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
 }
@@ -512,7 +512,7 @@ function addDaysDateStr(days) {
 function notifMeta(due, today) {
   if (due < today) return t('section_overdue');
   if (due === today) return t('section_today');
-  if (due === addDaysDateStr(i)) return t('notif_tomorrow');
+  if (due === addDaysDateStr(1)) return t('notif_tomorrow');
   const days = Math.max(2, Math.round((new Date(due + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000));
   return t('notif_in_days').replace('{n}', days);
 }

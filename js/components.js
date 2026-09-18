@@ -1,7 +1,7 @@
 import { addTask, archiveTask, getCategories, getTask, getTasks, getTemplatesByCategory, getHistory, localDateStr, permanentDeleteTask, restoreTask, sendToPending, resumeFromPending, setTaskStatus, startFocus, stopFocus, updateCategory, updateTask, addSpecialDay, updateSpecialDay, getSpecialDays, archiveSpecialDay, restoreSpecialDay, permanentDeleteSpecialDay } from './db.js?v=8';
 import { PRIORITY_CONFIG, STATUS_CONFIG } from './seed.js?v=6';
 import { createRecurringTaskInstance } from './recurrence.js?v=7';
-import { getLang, t } from './i18n.js?v=14';
+import { getLang, t } from './i18n.js?v=15';
 import { isPrefEnabled } from './prefs.js?v=5';
 import { pushDeletion } from './sync.js?v=11';
 import { getProfile, saveProfile } from './account.js?v=4';

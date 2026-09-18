@@ -441,7 +441,7 @@ export function attachTaskCardEvents(container = document) {
       const confirm = await confirmDialog({
         title: t(`status_${actual}`),
         message: `${t('move_to')} "${t(`status_${actual}`) || actual}"?`,
-        confirmText: t('ok'),
+        confirmText: t('dialog_ok'),
         dismissText: t('cancel')
       });
       if (!confirm) return;

@@ -1,6 +1,6 @@
 {
   "name": "todomeva",
-  "version": "1.0.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Todo Meva - offline-first todo manager with reminders, sync and broadcasts",
   "scripts": {

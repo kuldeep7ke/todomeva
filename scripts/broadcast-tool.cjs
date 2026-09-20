@@ -1,32 +1,40 @@
 #!/usr/bin/env node
-// Todo Meva broadcast + banner publish tool (jsonbin.io v3).
+// Todo Meva announcements publish tool (jsonbin.io v3) — single combined bin.
+//
+// The app reads ONE bin that holds BOTH the broadcast toasts and the promo
+// banner (News Meva pattern, see docs/ANNOUNCEMENTS-EDGE-PROXY-GUIDE.md):
+//   { broadcasts: [...], banner: {...} }
 //
 // Usage:
-//   node scripts/broadcast-tool.cjs setup    create both bins from scripts/content/*.json,
-//                                            then write the bin ids into js/broadcast.js
-//   node scripts/broadcast-tool.cjs bake     write bin ids from BAKED_BROADCAST_BIN_ID /
-//                                            BAKED_BANNER_BIN_ID env into js/broadcast.js
+//   node scripts/broadcast-tool.cjs setup    create ONE bin ('Announcements for
+//                                            ToDo Meva') from scripts/content/announcements.json,
+//                                            then write the id into js/broadcast.js AND into the
+//                                            FALLBACK_BIN_ID of functions/api/announcements.js
+//   node scripts/broadcast-tool.cjs bake     write bin id from BAKED_BIN_ID env into
+//                                            js/broadcast.js + functions/api/announcements.js
 //                                            (no key needed — for bins created in the dashboard)
-//   node scripts/broadcast-tool.cjs publish   push current scripts/content/*.json into the
-//                                            existing bins (ids read from js/broadcast.js)
+//   node scripts/broadcast-tool.cjs publish  push current scripts/content/announcements.json
+//                                            into the existing bin (id read from js/broadcast.js)
 //   node scripts/broadcast-tool.cjs help
 //
 // Env required:  JSONBIN_MASTER_KEY   (your jsonbin.io API key)
-// Optional env:  BAKED_BROADCAST_BIN_ID / BAKED_BANNER_BIN_ID  (override for publish)
+// Optional env:  BAKED_BIN_ID         (override for publish)
 //
-// Bins are created with X-Bin-Private=false so site visitors can read them
-// without any key. They are "publicly readable" like the Money Meva setup.
-// Bin ids are written into js/broadcast.js XOR+base64-obfuscated (same scheme
-// as Money Meva) so they never appear as plain text in the deployed bundle.
+// The bin is created with X-Bin-Private=false so site visitors can read it
+// without any key. The client bin id is written into js/broadcast.js
+// XOR+base64-obfuscated (same scheme as Money Meva) so it never appears as
+// plain text in the deployed bundle, while the Cloudflare proxy fallback id is
+// written in plain text into functions/api/announcements.js so the edge
+// function works with no environment variables.
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const BROADCAST_JS = path.join(ROOT, 'js', 'broadcast.js');
+const FUNCTIONS_API = path.join(ROOT, 'functions', 'api', 'announcements.js');
 const CONTENT_DIR = path.join(__dirname, 'content');
-const BROADCAST_FILE = path.join(CONTENT_DIR, 'broadcast.json');
-const BANNER_FILE = path.join(CONTENT_DIR, 'banner.json');
+const ANNOUNCEMENTS_FILE = path.join(CONTENT_DIR, 'announcements.json');
 const API = 'https://api.jsonbin.io/v3/b';
 const OBFUSCATE_KEY = 'todomeva';
 
@@ -52,20 +60,20 @@ function masterKey() {
   return key;
 }
 
-function readBroadcastJs() {
-  return fs.readFileSync(BROADCAST_JS, 'utf8');
+function readText(file) {
+  return fs.readFileSync(file, 'utf8');
 }
 
-function readBinId(name) {
-  const src = readBroadcastJs();
-  const match = src.match(new RegExp(`const ${name}\\s*=\\s*_d\\('([^']*)'\\)`));
-  const fromEnv = process.env[name];
-  if (fromEnv) return fromEnv.trim();
-  return (match && match[1] ? deobfuscateId(match[1]) : '').trim();
+function readBinId() {
+  const fromEnv = (process.env.BAKED_BIN_ID || '').trim();
+  if (fromEnv) return fromEnv;
+  const src = readText(BROADCAST_JS);
+  const match = src.match(/const BAKED_BIN_ID\s*=\s*_d\('([^']*)'\)/);
+  return match && match[1] ? deobfuscateId(match[1]).trim() : '';
 }
 
-function readContent(file) {
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+function readContent() {
+  return JSON.parse(fs.readFileSync(ANNOUNCEMENTS_FILE, 'utf8'));
 }
 
 async function createBin(name, content) {
@@ -87,7 +95,7 @@ async function createBin(name, content) {
 }
 
 async function updateBin(id, content) {
-  if (!id) throw new Error('Bin id is empty. Run setup first (or set the env override).');
+  if (!id) throw new Error('Bin id is empty. Run setup first (or set BAKED_BIN_ID).');
   const res = await fetch(`${API}/${id}`, {
     method: 'PUT',
     headers: {
@@ -104,58 +112,54 @@ async function updateBin(id, content) {
   return res.json();
 }
 
-function writeBinIds(broadcastId, bannerId) {
-  const src = readBroadcastJs();
-  const next = src
-    .replace(/(const BAKED_BROADCAST_BIN_ID\s*=\s*_d\()'[^']*'\)/, `$1'${obfuscateId(broadcastId)}')`)
-    .replace(/(const BAKED_BANNER_BIN_ID\s*=\s*_d\()'[^']*'\)/, `$1'${obfuscateId(bannerId)}')`);
-  if (next === src) throw new Error('Could not write bin ids into js/broadcast.js (markers not found).');
-  fs.writeFileSync(BROADCAST_JS, next);
+// Writes the bin id into BOTH:
+//   js/broadcast.js             -> BAKED_BIN_ID (XOR+base64 obfuscated)
+//   functions/api/announcements.js -> FALLBACK_BIN_ID (plain, so the edge
+//                                      function works without env vars)
+function writeBinId(id) {
+  const jsSrc = readText(BROADCAST_JS);
+  const jsNext = jsSrc.replace(/(const BAKED_BIN_ID\s*=\s*_d\()'[^']*'\)/, `$1'${obfuscateId(id)}')`);
+  if (jsNext === jsSrc) throw new Error('Could not write bin id into js/broadcast.js (BAKED_BIN_ID marker not found).');
+
+  const fnSrc = readText(FUNCTIONS_API);
+  const fnNext = fnSrc.replace(/const FALLBACK_BIN_ID = '[^']*';/, `const FALLBACK_BIN_ID = '${id}';`);
+  if (fnNext === fnSrc) throw new Error('Could not write fallback bin id into functions/api/announcements.js (FALLBACK_BIN_ID marker not found).');
+
+  fs.writeFileSync(BROADCAST_JS, jsNext);
+  fs.writeFileSync(FUNCTIONS_API, fnNext);
 }
 
 async function setup() {
-  const broadcast = readContent(BROADCAST_FILE);
-  const banner = readContent(BANNER_FILE);
-  console.log('Creating bins on jsonbin.io (public reads, no-key needed for visitors)...');
-  const broadcastId = await createBin('todo-meva-broadcast', broadcast);
-  const bannerId = await createBin('todo-meva-banner', banner);
-  writeBinIds(broadcastId, bannerId);
+  const content = readContent();
+  console.log('Creating one combined bin on jsonbin.io (public reads, no-key needed for visitors)...');
+  const id = await createBin('Announcements for ToDo Meva', content);
+  writeBinId(id);
   console.log('Done.');
-  console.log('  broadcast bin id:', broadcastId);
-  console.log('  banner bin id:   ', bannerId);
-  console.log('Wrote both ids (XOR+base64 obfuscated) into js/broadcast.js.');
+  console.log('  bin id:', id);
+  console.log('Wrote the id into js/broadcast.js (XOR+base64 obfuscated) and functions/api/announcements.js (FALLBACK_BIN_ID).');
   console.log('\nTest read (no auth):');
-  console.log('  curl ' + `https://api.jsonbin.io/v3/b/${broadcastId}/latest`);
+  console.log('  curl ' + `https://api.jsonbin.io/v3/b/${id}/latest`);
 }
 
 async function publish() {
-  const broadcastId = readBinId('BAKED_BROADCAST_BIN_ID');
-  const bannerId = readBinId('BAKED_BANNER_BIN_ID');
-  if (!broadcastId && !bannerId) {
-    console.error('No bin ids found. Run setup first or set BAKED_BROADCAST_BIN_ID / BAKED_BANNER_BIN_ID env.');
+  const id = readBinId();
+  if (!id) {
+    console.error('No bin id found. Run setup first or set BAKED_BIN_ID env.');
     process.exit(1);
   }
-  const tasks = [];
-  if (broadcastId) tasks.push(['broadcast', broadcastId, readContent(BROADCAST_FILE)]);
-  if (bannerId) tasks.push(['banner', bannerId, readContent(BANNER_FILE)]);
-  for (const [label, id, content] of tasks) {
-    await updateBin(id, content);
-    console.log(`Updated ${label} (${id}).`);
-  }
+  await updateBin(id, readContent());
+  console.log(`Updated combined bin (${id}).`);
   console.log('Publish complete — visitors see changes within the 60s poll. Banner shows on next fresh load.');
 }
 
 async function bake() {
-  const broadcastId = (process.env.BAKED_BROADCAST_BIN_ID || '').trim();
-  const bannerId = (process.env.BAKED_BANNER_BIN_ID || '').trim();
-  if (!broadcastId || !bannerId) {
-    console.error('Set both BAKED_BROADCAST_BIN_ID and BAKED_BANNER_BIN_ID env vars (the bin ids from your jsonbin dashboard).');
+  const id = (process.env.BAKED_BIN_ID || '').trim();
+  if (!id) {
+    console.error('Set the BAKED_BIN_ID env var (the bin id from your jsonbin dashboard).');
     process.exit(1);
   }
-  writeBinIds(broadcastId, bannerId);
-  console.log('Wrote both bin ids into js/broadcast.js (XOR+base64 obfuscated).');
-  console.log('  broadcast bin id:', broadcastId);
-  console.log('  banner bin id:   ', bannerId);
+  writeBinId(id);
+  console.log(`Wrote bin id ${id} into js/broadcast.js (obfuscated) and functions/api/announcements.js (FALLBACK_BIN_ID).`);
 }
 
 async function main() {
@@ -164,12 +168,12 @@ async function main() {
   else if (cmd === 'bake') await bake();
   else if (cmd === 'publish') await publish();
   else {
-    console.log('Todo Meva broadcast/banner publish tool');
-    console.log('  setup   — create both jsonbin bins from scripts/content/*.json, write ids into js/broadcast.js');
-    console.log('  bake    — write bin ids from BAKED_*_BIN_ID env into js/broadcast.js (no key, for dashboard-created bins)');
-    console.log('  publish — update the existing bins with current scripts/content/*.json');
+    console.log('Todo Meva announcements publish tool (single combined bin)');
+    console.log('  setup   — create the combined jsonbin bin from scripts/content/announcements.json, write id into js/broadcast.js + functions/api/announcements.js');
+    console.log('  bake    — write bin id from BAKED_BIN_ID env into both files (no key, for dashboard-created bins)');
+    console.log('  publish — update the existing bin with current scripts/content/announcements.json');
     console.log('  help    — show this help');
-    console.log('\nEnv: JSONBIN_MASTER_KEY required for setup/publish. Bake/publish can override ids via BAKED_BROADCAST_BIN_ID / BAKED_BANNER_BIN_ID.');
+    console.log('\nEnv: JSONBIN_MASTER_KEY required for setup/publish. Publish can override the id via BAKED_BIN_ID.');
   }
 }
 

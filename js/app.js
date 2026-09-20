@@ -1,13 +1,13 @@
 import { exportData, getCategories, getTasks, importData, localDateStr, seedDatabase, sendToPending, setTaskStatus } from './db.js?v=8';
 import { archiveTaskById, closeQuickAdd, emptyArchiveAll, formStateSnapshot, openQuickAdd, openTaskDetail, openTimerPopup, purgeTaskById, refreshIcons, renderSidebar, restoreTaskById, showOnboarding } from './components.js?v=15';
-import { renderBasics, renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderRecommended, renderSettings, renderTime, renderUpcoming, renderNotificationsPanel, openSpecialDayModal, updateNotifBadge, updateSyncStatusUI } from './views.js?v=22';
+import { renderBasics, renderCategory, renderDashboard, renderDone, renderArchive, renderPriorityMatrix, renderRecommended, renderSettings, renderTime, renderUpcoming, renderNotificationsPanel, openSpecialDayModal, updateNotifBadge, updateSyncStatusUI } from './views.js?v=23';
 import { checkAndFireReminders, requestNotificationPermission } from './reminder.js?v=8';
 import { getNotifyPrefs, resetPrefs, setPref } from './prefs.js?v=5';
 import { saveProfile } from './account.js?v=4';
 import { initLang, setLang, t } from './i18n.js?v=15';
 import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL, saveSyncLink, clearSavedSyncLink, getSavedSyncLink } from './sync.js?v=11';
 import { confirmDialog, isDialogOpen } from './dialog.js?v=2';
-import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=6';
+import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=7';
 
 let activeView = 'dashboard';
 let activeWindow = 'today';
@@ -47,7 +47,10 @@ async function initApp() {
     await refreshCurrentView();
     showOnboarding();
     autoConnect();
-    initBroadcasts();
+    // Await the banner decision so the splash stays up as the loading skeleton
+    // while a valid banner loads (painted over it) — we never drop the splash
+    // into a flash when the bin has nothing to show. See broadcast.js.
+    await initBroadcasts();
     setInterval(checkAndFireReminders, 30000);
     setInterval(tickFocusTimers, 1000);
     setInterval(autoPendOverdue, 60000);

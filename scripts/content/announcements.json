@@ -1,0 +1,30 @@
+{
+  "broadcasts": [
+    {
+      "id": "todo-meva-welcome",
+      "title": "To Do Meva",
+      "message": "Welcome to your private, offline-first daily planner. Double-tap any block to add a task; drag to reorder.",
+      "type": "success",
+      "pinned": true,
+      "expires": "2030-12-31"
+    },
+    {
+      "id": "todo-meva-targeted-sample",
+      "title": "Targeted note",
+      "message": "This shows only on the device whose ID is set in Settings → Broadcasts → Device ID (set \"targetId\"). Delete when unneeded.",
+      "type": "info",
+      "expires": "2030-12-31",
+      "targetId": ""
+    }
+  ],
+  "banner": {
+    "id": "todo-meva-banner-welcome",
+    "title": "Your days, off the grid",
+    "content": "Everything stays on this device. Tasks, sync, memories — no cloud, no accounts, no subscriptions.",
+    "image": "https://placehold.co/800x400/F97316/FFFFFF?text=Todo+Meva",
+    "href": "https://github.com/kuldeep23906/todoMeva",
+    "width": "480",
+    "startDate": "2026-01-01",
+    "expires": "2030-12-31"
+  }
+}

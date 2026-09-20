@@ -1,7 +1,7 @@
 import { getCategories, getTasks, getSpecialDays, localDateStr } from './db.js?v=8';
 import { attachTaskCardEvents, bindCategoryPickers, icon, openQuickAdd, renderTaskCard, renderSpecialDayCard, refreshIcons } from './components.js?v=15';
 import { getLang, getLangs, t } from './i18n.js?v=15';
-import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=6';
+import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=7';
 import { getNotifyPrefs } from './prefs.js?v=5';
 import { getProfile } from './account.js?v=4';
 import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=8';

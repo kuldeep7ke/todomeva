@@ -1,34 +1,34 @@
 import { t } from './i18n.js?v=15';
 
-// Live broadcast toasts + promo banner, delivered from jsonbin.io bins.
-// Any authorized third-party site can edit the bins on jsonbin.io and the
+// Live broadcast toasts + promo banner, delivered from a SINGLE jsonbin.io bin
+// via the Cloudflare edge-cached proxy (mirrors the News Meva architecture).
+// Any authorized third-party site can edit the bin on jsonbin.io and the
 // message shows here within the poll interval — no app update needed.
 //
-// Fetch path (quota protection, mirrors Money Meva — see
+// Fetch path (quota protection — see
 // docs/ANNOUNCEMENTS-EDGE-PROXY-GUIDE.md):
-//   app -> https://todomeva.pages.dev/api/announcements?type=broadcast|banner
+//   app -> https://todomeva.pages.dev/api/announcements
 //   (Cloudflare Pages Function, edge-cached) -> jsonbin. The proxy URL is its
 //   own constant, deliberately NOT derived from location.origin — one canonical
 //   URL serves CF Pages, GitHub Pages and the APK (via CORS `*`). Direct
 //   jsonbin URLs below stay as an automatic fallback if the proxy is down.
 //
-// Records:
-//   broadcast: { id, title?, message, type?('info'|'warning'|'success'|'error'),
-//                pinned?, expires?, link?, targetId? }
-//   banner:    { id, title?, content, image?, href?, width?(px), startDate?,
-//                expires?, targetId? }
+// Bin shape (ONE bin holds both — same as News Meva):
+//   { broadcasts: [ { id, title?, message, type?('info'|'warning'|'success'|'error'),
+//                     pinned?, expires?, link?, targetId? } ],
+//     banner:     { id, title?, content, image?, href?, width?(px), startDate?,
+//                   expires?, targetId? } }
 // Optional targeting: set "targetId" on a record to this device's ID (shown in
 // Settings → Broadcasts) to show it only on that device. No targetId = everyone.
 //
 // Dev/testing overrides (localStorage, no rebuild needed):
 //   todoMeva_announcementsApi  announcements proxy endpoint if not todomeva.pages.dev
 //   todoMeva_jsonbinBase       base URL instead of https://api.jsonbin.io/v3/b
-//   todoMeva_broadcastBin      broadcast bin id instead of the baked-in value
-//   todoMeva_bannerBin         banner bin id instead of the baked-in value
+//   todoMeva_broadcastBin      bin id instead of the baked-in value
 
-// The two ids below are injected by `node scripts/broadcast-tool.cjs setup`.
-// They are XOR+base64 obfuscated (decoded at runtime) so the real bin ids never
-// appear as plain text in the deployed bundles — mirrors the Money Meva setup.
+// The id below is injected by `node scripts/broadcast-tool.cjs setup`.
+// It is XOR+base64 obfuscated (decoded at runtime) so the real bin id never
+// appears as plain text in the deployed bundles — mirrors the Money Meva setup.
 const _K = 'todomeva';
 function _d(e) {
   try {
@@ -40,14 +40,14 @@ function _d(e) {
     return '';
   }
 }
-const BAKED_BROADCAST_BIN_ID = _d('Qg4FVw9URlMVDFJdXFVAUUEOBwpeURUE');
-const BAKED_BANNER_BIN_ID = _d('Qg4FVw9UTiMVDFJdXFVAUUEOBwpeU0ZV');
+// TODO: replaced with the obfuscated real bin id by `broadcast-tool setup`.
+const BAKED_BIN_ID = _d('Qg4FCQ8AEFQSCQBaCVRAUUFcVQ0JBEQA');
 
 const POLL_SECONDS = 60;
 const BANNER_COUNTDOWN_SECONDS = 7;
+const BANNER_IMAGE_TIMEOUT_MS = 3500;
 
-const BROADCAST_BIN_ID = () => localStorage.getItem('todoMeva_broadcastBin') || BAKED_BROADCAST_BIN_ID;
-const BANNER_BIN_ID = () => localStorage.getItem('todoMeva_bannerBin') || BAKED_BANNER_BIN_ID;
+const BIN_ID = () => localStorage.getItem('todoMeva_broadcastBin') || BAKED_BIN_ID;
 const JSONBIN_BASE = () => localStorage.getItem('todoMeva_jsonbinBase') || 'https://api.jsonbin.io/v3/b';
 const JSONBIN_LATEST = (id) => `${JSONBIN_BASE()}/${id}/latest`;
 // Canonical announcements proxy (Cloudflare Pages Function). Deliberately NOT
@@ -55,7 +55,7 @@ const JSONBIN_LATEST = (id) => `${JSONBIN_BASE()}/${id}/latest`;
 // but announcements must keep flowing through the shared proxy (see
 // docs/ANNOUNCEMENTS-EDGE-PROXY-GUIDE.md). Override via localStorage for dev/testing.
 const ANNOUNCEMENTS_API = () => localStorage.getItem('todoMeva_announcementsApi') || 'https://todomeva.pages.dev/api/announcements';
-const ANNOUNCEMENTS_URL = (type) => `${ANNOUNCEMENTS_API().replace(/\/+$/, '')}?type=${type}`;
+const ANNOUNCEMENTS_URL = () => ANNOUNCEMENTS_API().replace(/\/+$/, '');
 
 const DEVICE_ID_KEY = 'todoMeva_deviceId';
 const DISMISSED_KEY = 'todoMeva_dismissedBroadcasts';
@@ -209,25 +209,25 @@ function dismissPill(el) {
   setTimeout(() => el.remove(), 260);
 }
 
-async function loadAnnouncement(type, id) {
+// Single combined fetch: the bin holds BOTH broadcasts and the banner.
+async function loadAnnouncement() {
+  const id = BIN_ID();
   if (!id) return null;
-  const viaProxy = await fetchJson(ANNOUNCEMENTS_URL(type));
+  const viaProxy = await fetchJson(ANNOUNCEMENTS_URL());
   if (viaProxy !== null) return viaProxy;
   return fetchJson(JSONBIN_LATEST(id));
 }
 
 async function loadBroadcasts() {
-  const id = BROADCAST_BIN_ID();
-  if (!id) return null;
-  const res = await loadAnnouncement('broadcast', id);
+  const res = await loadAnnouncement();
   if (!res) return null;
   const raw = res.record ?? res;
-  const list = (Array.isArray(raw) ? raw : [raw]).filter((b) => b && b.id && b.message);
+  const list = (Array.isArray(raw?.broadcasts) ? raw.broadcasts : []).filter((b) => b && b.id && b.message);
   return list.map((b) => ({ ...b, id: String(b.id) }));
 }
 
 export async function refreshBroadcasts() {
-  if (!BROADCAST_BIN_ID()) {
+  if (!BIN_ID()) {
     lastState = 'unconfigured';
     setStateLabel(t('bc_not_configured'));
     return null;
@@ -249,14 +249,17 @@ export async function refreshBroadcasts() {
   return visible;
 }
 
-async function loadBanner() {
-  const id = BANNER_BIN_ID();
-  if (!id) return null;
-  const res = await loadAnnouncement('banner', id);
-  if (!res) return null;
-  const banner = res.record ?? res;
-  if (!banner || !banner.id || !banner.content) return null;
-  return { ...banner, id: String(banner.id), width: banner.width ? Number(banner.width) : 420 };
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((resolve) => setTimeout(resolve, ms))]);
+}
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = resolve;
+    img.onerror = resolve;
+    img.src = src;
+  });
 }
 
 function bannerHtml(b) {
@@ -313,20 +316,30 @@ function showBanner(b) {
   });
 }
 
-function maybeShowBanner() {
-  if (bannerShownThisSession() || !BANNER_BIN_ID()) return;
-  (async () => {
-    const banner = await loadBanner();
-    if (!banner || !isWithinPeriod(banner.startDate, banner.expires) || !matchesDevice(banner)) return;
-    showBanner(banner);
-    markBannerShownSession();
-  })();
+// Banner overlay only paints once we KNOW an in-period banner exists.
+// While it loads (image preload), the splash stays up as the skeleton
+// backdrop — then the banner paints over it and the splash is dropped, so a
+// hard reload with nothing to show never flashes the overlay. Returns true if
+// the banner ended up being displayed.
+async function maybeShowBanner() {
+  if (bannerShownThisSession() || !BIN_ID()) return false;
+  const res = await loadAnnouncement();
+  if (!res) return false;
+  const record = res.record ?? res;
+  const b = record?.banner;
+  if (!b || !b.id || !b.content) return false;
+  const banner = { ...b, id: String(b.id), width: b.width ? Number(b.width) : 420 };
+  if (!isWithinPeriod(banner.startDate, banner.expires) || !matchesDevice(banner)) return false;
+  if (banner.image) await withTimeout(preloadImage(banner.image), BANNER_IMAGE_TIMEOUT_MS);
+  showBanner(banner);
+  markBannerShownSession();
+  return true;
 }
 
-export function initBroadcasts() {
+export async function initBroadcasts() {
   lastState = 'listen';
   setStateLabel(getBroadcastStatus());
-  maybeShowBanner();
+  await maybeShowBanner();
   refreshBroadcasts();
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => refreshBroadcasts(), POLL_SECONDS * 1000);

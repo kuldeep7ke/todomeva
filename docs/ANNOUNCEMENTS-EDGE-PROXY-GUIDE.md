@@ -30,14 +30,18 @@ A single Cloudflare Pages Function acts as an **edge-cached proxy** between ever
 app instance and jsonbin:
 
 ```
-Every app instance ──> https://todomeva.pages.dev/api/announcements?type=broadcast|banner
+Every app instance ──> https://todomeva.pages.dev/api/announcements
   ├─ Cloudflare Pages web                       │
   ├─ GitHub Pages web                           │  Cloudflare edge cache
   └─ Android APK (installed, no server)         │  ONE copy per TTL window
                                                 ▼
-                              jsonbin.io/v3/b/<bin-id>/latest
+                              jsonbin.io/v3/b/<combined-bin-id>/latest
                               (hit only on cache expiry / miss)
 ```
+
+One combined bin holds everything the app needs (broadcast pills under
+`broadcasts`, the promo banner under `banner`), so a single cache key serves the
+whole feature: one jsonbin request per TTL window total.
 
 The app calls **your own URL**, never jsonbin directly. On the first request in a
 TTL window the function hits jsonbin once and caches the reply at Cloudflare's
@@ -81,25 +85,36 @@ slower propagation. Everything stays well under 10k for a single bin.
 A Cloudflare Pages **Function** (`functions/api/announcements.js`) that
 normalizes the cache key (ignores extra query params so all devices share one
 cache entry), fetches jsonbin on a miss, caches at the edge, and always returns
-CORS headers. Bin IDs are configurable as Pages **environment variables**
-(`BROADCAST_BIN_ID` / `BANNER_BIN_ID`) with `FALLBACK_IDS` in code.
+CORS headers. The bin id is configurable as a Pages **environment variable**
+(`ANNOUNCEMENTS_BIN_ID`, legacy `BROADCAST_BIN_ID` honored) with
+`FALLBACK_BIN_ID` in code.
 
 ```js
-const TTL_MINUTES = 10;                 // Todo Meva default — tunable (see quota math, §2)
+// functions/api/announcements.js — single combined announcements bin
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b/';
+// Filled in by `node scripts/broadcast-tool.cjs setup` (or bake).
+const FALLBACK_BIN_ID = '<combined-bin-id>';
+const TTL_MINUTES = 10; // tunable (see quota math, §2)
 
 export async function onRequestGet(context) {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
-  const type = url.searchParams.get('type') === 'banner' ? 'banner' : 'broadcast';
-  const binId = (type === 'banner' ? env.BANNER_BIN_ID : env.BROADCAST_BIN_ID) || FALLBACK_IDS[type];
+  const binId = env.ANNOUNCEMENTS_BIN_ID || env.BROADCAST_BIN_ID || FALLBACK_BIN_ID;
 
-  const cacheKey = new Request(`${url.origin}/api/announcements?type=${type}`);
+  if (!binId) {
+    return new Response(JSON.stringify({ error: 'bin-not-configured' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const cacheKey = new Request(`${url.origin}/api/announcements`); // one key for all devices
   const cache = caches.default;
 
   let res = await cache.match(cacheKey);
   if (!res) {
     try {
-      const upstream = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      const upstream = await fetch(`${JSONBIN_BASE}${binId}/latest`, {
         headers: { Accept: 'application/json' },
         cf: { cacheTtl: TTL_MINUTES * 60 },
       });
@@ -109,7 +124,7 @@ export async function onRequestGet(context) {
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
           'Cache-Control': `public, max-age=${TTL_MINUTES * 60}`,
-          'Access-Control-Allow-Origin': '*',      // cross-origin: GH Pages + APK
+          'Access-Control-Allow-Origin': '*', // cross-origin: GH Pages + APK
         },
       });
       if (upstream.ok) waitUntil(cache.put(cacheKey, res.clone()));
@@ -130,9 +145,9 @@ export async function onRequestGet(context) {
 >   `wrangler pages deploy .`, which bundles `functions/`, and auto-creates the
 >   project with `pages project create todomeva ... || true` if missing). No
 >   per-project config is needed.
-> - **No dashboard environment variables are required.** `FALLBACK_IDS` in the
->   function carries the bin IDs server-side (`broadcast`/`banner` bins); the
->   dashboard controls are optional overrides.
+> - **No dashboard environment variables are required.** `FALLBACK_BIN_ID` in the
+>   function carries the combined bin id server-side; the dashboard controls are
+>   optional overrides (`ANNOUNCEMENTS_BIN_ID`, legacy `BROADCAST_BIN_ID`).
 > - The app's canonical endpoint is
 >   `https://todomeva.pages.dev/api/announcements`. It is deliberately
 >   decoupled from where the app is served (see §3-B).
@@ -150,7 +165,7 @@ same shared proxy.
 const ANNOUNCEMENTS_API = () =>
   localStorage.getItem('todoMeva_announcementsApi') ||
   'https://todomeva.pages.dev/api/announcements';
-const ANNOUNCEMENTS_URL = (type) => `${ANNOUNCEMENTS_API().replace(/\/+$/, '')}?type=${type}`;
+const ANNOUNCEMENTS_URL = () => ANNOUNCEMENTS_API().replace(/\/+$/, '');
 ```
 
 - Default: shared Cloudflare proxy — correct for every default build (web, GH
@@ -160,22 +175,26 @@ const ANNOUNCEMENTS_URL = (type) => `${ANNOUNCEMENTS_API().replace(/\/+$/, '')}?
 
 ### C. The app-side fetch pattern (proxy first, graceful fallback)
 
-`js/broadcast.js` implements `loadAnnouncement(type, id)`:
+`js/broadcast.js` implements `loadAnnouncement()`, which fetches the combined bin
+once (banner + broadcasts together) and unwraps both families from the record:
 
 ```js
-async function loadAnnouncement(type, id) {
-  if (!id) return null;
-  const viaProxy = await fetchJson(ANNOUNCEMENTS_URL(type));   // primary: edge-cached proxy
-  if (viaProxy !== null) return viaProxy;
-  return fetchJson(JSONBIN_LATEST(id));                        // fallback: direct jsonbin
+async function loadAnnouncement() {
+  const viaProxy = await fetchJson(ANNOUNCEMENTS_URL());   // primary: edge-cached proxy
+  const raw = viaProxy !== null ? viaProxy : await fetchJson(JSONBIN_LATEST(BIN_ID()));
+  return {
+    broadcasts: raw?.record?.broadcasts ?? raw?.broadcasts ?? [],
+    banner: raw?.record?.banner ?? raw?.banner ?? null,
+  };
 }
 ```
 
 `fetchJson` uses `{ cache: 'no-store' }` so each poll is a fresh proxy call (the
 edge still absorbs the jsonbin hit). Response shape is jsonbin's
 (`{ record: ... }`); unwrap via `res?.record ?? res`. Parse
-`expires`/`startDate` and skip stale/dismissed entries. On any failure return
-`null` — silent, no pill/banner.
+`expires`/`startDate` and skip stale/dismissed entries/banners. On any failure
+return `null` — silent, no pill/banner (and the banner overlay must never paint
+if there is no valid banner — the splash stays up as a skeleton instead).
 
 ## 4. How it works on each platform
 
@@ -186,22 +205,27 @@ edge still absorbs the jsonbin hit). Response shape is jsonbin's
 | Android APK | bundled WebView | cross-origin proxy | yes | edge-cached |
 | Any other host (Netlify/Vercel/custom) | same | cross-origin proxy | yes | edge-cached |
 
-All four are identical from the function's point of view — a GET with `?type=`.
-Nothing is platform-specific in the app code.
+All four are identical from the function's point of view — a plain GET to the
+same absolute URL. Nothing is platform-specific in the app code.
 
 ## 5. Setting it up for a NEW app (reuse checklist)
 
-1. **jsonbin** — create a bin; paste your array (broadcast) or single object
-   (banner). Copy the bin ID. (**Keep bins public** — private bins return `401`.)
+1. **jsonbin** — create a bin; paste the combined record
+   (`{ "broadcasts": [...], "banner": { ... } }` — see
+   `scripts/content/announcements.json` for the template). Copy the bin ID.
+   (**Keep the bin public** — a private bin returns `401`.)
 2. **Cloudflare Pages** — create a project (new, or reuse an existing one so the
    function rides the same edge cache). Add a `functions/api/announcements.js`
    exactly as in §3-A and `functions/` must be deployed (Cloudflare auto-runs
    Functions; no config). In Todo Meva this is automatic: the deploy workflow
    deploys to the `todomeva` project and creates a missing project
    (`pages project create todomeva ... || true`).
-3. **Bin IDs** — optional. Set `BROADCAST_BIN_ID` / `BANNER_BIN_ID` as Production
-   env vars in the Pages dashboard, **or** skip dashboard setup entirely and let
-   `FALLBACK_IDS` in code (server-side, never in app bundles) carry the IDs.
+3. **Bin ID** — optional. Set `ANNOUNCEMENTS_BIN_ID` (or legacy
+   `BROADCAST_BIN_ID`) as a Production env var in the Pages dashboard, **or**
+   bake the id into both files with `node scripts/broadcast-tool.cjs bake`
+   (writes the obfuscated `BAKED_BIN_ID` into `js/broadcast.js` and
+   `FALLBACK_BIN_ID` into `functions/api/announcements.js` — server-side, never
+   in app bundles).
 4. **App** — add the `ANNOUNCEMENTS_API` constant (§3-B) and the fetch pattern
    (§3-C). Wire the pills/banner UI to the fetched records.
 5. **TTL** — tune `TTL_MINUTES` per the quota math (§2).
@@ -224,7 +248,7 @@ Nothing is platform-specific in the app code.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Nothing on GH Pages / APK | App derived its announcements URL from `location.origin` (old config) and 404'd | Use the absolute proxy constant (§3-B); don't derive from the app's origin |
-| 404 on proxy | Wrong host / bin missing / project not yet deployed | Check the function deployed (`https://todomeva.pages.dev/api/announcements?type=broadcast` via `curl -I`) |
+| 404 on proxy | Wrong host / bin missing / project not yet deployed | Check the function deployed (`https://todomeva.pages.dev/api/announcements` via `curl -I`) |
 | CORS error in browser/WebView | Function header missing | Ensure `Access-Control-Allow-Origin: *` |
 | Stale content | Edge TTL + poll interval | Lower `TTL_MINUTES`, push, reload app |
 | jsonbin usage climbing | Proxy bypassed (fallback engaged) | Check app network tab: requests must go to `todomeva.pages.dev/api/announcements`, not `api.jsonbin.io` |
@@ -239,8 +263,10 @@ Nothing is platform-specific in the app code.
 
 ## 9. Notes & trade-offs
 
-- **Multiple bins/companies**: add a `type` param per record family; each stays a
-  separate cache key and jsonbin hit.
+- **Multiple record families**: combine them in ONE bin (one cache key, one
+  jsonbin hit per TTL window — like Todo Meva's `broadcasts` + `banner`). Split
+  into separate bins only when families need different TTLs or ownership; each
+  extra bin keeps its own bin id and cache key in the same function.
 - **Unbounded per-user churn**: capped at TTL; the pattern trades *real-time per
   user* for *bounded global cost*.
 - **Offline**: if the proxy (and fallback) are unreachable, the app shows no

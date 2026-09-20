@@ -1,15 +1,14 @@
-// Cloudflare Pages Function — edge-cached proxy for jsonbin announcement bins.
+// Cloudflare Pages Function — edge-cached proxy for the single jsonbin
+// announcements bin (holds both broadcasts and the promo banner).
 // All devices hit THIS endpoint; Cloudflare serves each response from the edge
 // cache for TTL_MINUTES, so jsonbin request volume depends on time only —
-// never on user count. The same ids live obfuscated in js/broadcast.js as a
+// never on user count. The bin id also lives obfuscated in js/broadcast.js as a
 // client-side fallback when this proxy is unreachable (e.g. GitHub Pages).
-// Optional: set BROADCAST_BIN_ID / BANNER_BIN_ID as Pages env vars in the
-// Cloudflare dashboard to override the fallbacks below.
+// Optional: set ANNOUNCEMENTS_BIN_ID (or legacy BROADCAST_BIN_ID) as Pages env
+// vars in the Cloudflare dashboard to override the fallback below.
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b/';
-const FALLBACK_IDS = {
-  broadcast: '6aa8b102ac6210605ace34ce',
-  banner: '6aa8b192ac6210605ace3604',
-};
+// Filled in by `node scripts/broadcast-tool.cjs setup` (or bake).
+const FALLBACK_BIN_ID = '6aafbef5ffd5d160531bda2a';
 // How long each response is cached at Cloudflare's edge (in MINUTES).
 // Lower = users see jsonbin edits sooner (but jsonbin gets more requests). Higher = fewer requests.
 const TTL_MINUTES = 10;
@@ -18,11 +17,17 @@ const TTL_SECONDS = TTL_MINUTES * 60;
 export async function onRequestGet(context) {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
-  const type = url.searchParams.get('type') === 'banner' ? 'banner' : 'broadcast';
-  const binId = (type === 'banner' ? env.BANNER_BIN_ID : env.BROADCAST_BIN_ID) || FALLBACK_IDS[type];
+  const binId = env.ANNOUNCEMENTS_BIN_ID || env.BROADCAST_BIN_ID || FALLBACK_BIN_ID;
 
-  // Normalize cache key: ignore any extra query params so every device shares one cache entry
-  const cacheKey = new Request(`${url.origin}/api/announcements?type=${type}`);
+  if (!binId) {
+    return new Response(JSON.stringify({ error: 'bin-not-configured' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  // Normalize cache key: ignore any query params so every device shares one cache entry
+  const cacheKey = new Request(`${url.origin}/api/announcements`);
   const cache = caches.default;
 
   let res = await cache.match(cacheKey);

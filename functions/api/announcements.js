@@ -8,7 +8,7 @@
 // vars in the Cloudflare dashboard to override the fallback below.
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3/b/';
 // Filled in by `node scripts/broadcast-tool.cjs setup` (or bake).
-const FALLBACK_BIN_ID = '6aafbef5ffd5d160531bda2a';
+const FALLBACK_BIN_ID = '6aafc56aac6210605ae2573a';
 // How long each response is cached at Cloudflare's edge (in MINUTES).
 // Lower = users see jsonbin edits sooner (but jsonbin gets more requests). Higher = fewer requests.
 const TTL_MINUTES = 10;

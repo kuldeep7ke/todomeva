@@ -41,7 +41,7 @@ function _d(e) {
   }
 }
 // TODO: replaced with the obfuscated real bin id by `broadcast-tool setup`.
-const BAKED_BIN_ID = _d('Qg4FCQ8AEFQSCQBaCVRAUUFcVQ0JBEQA');
+const BAKED_BIN_ID = _d('Qg4FCQ5QQAAVDFJdXFVAUUEOAV1YUkUA');
 
 const POLL_SECONDS = 60;
 const BANNER_COUNTDOWN_SECONDS = 7;

@@ -7,7 +7,7 @@ import { saveProfile } from './account.js?v=4';
 import { initLang, setLang, t } from './i18n.js?v=15';
 import { connectSync, disconnectSync, manualSync, pushAll, SCHEMA_SQL, saveSyncLink, clearSavedSyncLink, getSavedSyncLink } from './sync.js?v=11';
 import { confirmDialog, isDialogOpen } from './dialog.js?v=2';
-import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=7';
+import { getDeviceId, initBroadcasts, refreshBroadcasts } from './broadcast.js?v=8';
 
 let activeView = 'dashboard';
 let activeWindow = 'today';

@@ -24,13 +24,12 @@ export async function renderDashboard() {
     <section class="grid stats-grid">
       ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><div class="quick-create"><button class="btn btn-primary" data-open-quick-add>${t('add_task_fab')}</button><div class="quick-cats">${categories.map((c) => `<button class="quick-cat-pill" type="button" data-open-quick-cat="${c.id}" title="${escapeHtml(c.name)}"><span class="category-dot" style="background:${c.color}"></span>${escapeHtml(c.name)}</button>`).join('')}</div><span class="muted">${t('quick_add_hint')}</span></div></section>
+    <section class="card"><h3>${t('quick_create')}</h3><div class="quick-create"><button class="btn btn-primary" data-open-quick-add>${t('add_task_fab')}</button><span class="muted">${t('quick_add_hint')}</span></div></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}
   `;
   content.querySelector('[data-open-quick-add]').addEventListener('click', () => openQuickAdd());
-  content.querySelectorAll('[data-open-quick-cat]').forEach((pill) => pill.addEventListener('click', () => openQuickAdd(pill.dataset.openQuickCat)));
   attachTaskCardEvents(content);
   bindCategoryPickers(content);
   refreshIcons();
@@ -115,6 +114,7 @@ export async function renderCategory(categoryId) {
 }
 
 export async function renderPriorityMatrix() {
+  const content = document.querySelector('#view-content');
   const { tasks, categoryMap } = await loadViewData();
   const nonDeleted = tasks.filter((task) => !task.deletedAt);
   const openTasks = nonDeleted.filter((task) => task.status !== 'done' && task.status !== 'pending');
@@ -125,22 +125,48 @@ export async function renderPriorityMatrix() {
   const today = localDateStr();
   const overdue = openTasks.filter((task) => task.dueDate && task.dueDate < today).length;
   const inProgressNow = counts.in_progress;
-  const analysisBar = (status, count, color) => `<div class="pm-row" data-status="${count > 0 ? 'has' : 'empty'}"><span class="pm-dot" style="background:${color}"></span><span class="pm-label">${t(`status_${status}`)}</span><span class="pm-count">${count}</span></div>`;
   const statusColors = { not_started: 'var(--accent)', in_progress: 'var(--danger)', pending: 'var(--warning)', done: 'var(--success)' };
-  const analysisRows = statuses.map((status) => analysisBar(
-    status, counts[status], statusColors[status]
-  )).join('');
+  const pctOf = (count) => (total ? Math.round((count / total) * 100) : 0);
   const analysisCard = `
     <section class="card pm-analysis">
-      <h3 class="pm-title">${t('pm_analysis')}</h3>
-      <div class="pm-status-list">${analysisRows}</div>
-      <div class="pm-progress"><div class="pm-progress-track"><div class="pm-progress-fill" style="width:${donePct}%"></div></div><span class="muted">${donePct}% ${t('stat_completed')}</span></div>
-      <div class="pm-foot muted">
-        <span class="pm-foot-item">${t('status_in_progress')}: <strong>${inProgressNow}</strong></span>
-        <span class="pm-foot-item">${t('stat_overdue')}: <strong>${overdue}</strong></span>
+      <div class="pm-head">
+        <div class="pm-head-text">
+          <h3 class="pm-title">${t('pm_analysis')}</h3>
+          <p class="pm-sub muted">${t('pm_tasks_line').replace('{done}', counts.done).replace('{total}', total)}</p>
+        </div>
+        <span class="pm-score" style="background:conic-gradient(var(--success) ${donePct}%, var(--surface-muted) 0)"><b>${donePct}%</b></span>
+      </div>
+      <div class="pm-progress"><div class="pm-progress-track"><div class="pm-progress-fill" style="width:${donePct}%"></div></div></div>
+      <div class="pm-breakdown">
+        <span class="pm-breakdown-label">${t('pm_by_status')}</span>
+        ${statuses.map((status) => {
+          const count = counts[status];
+          return `<div class="pm-row ${count ? '' : 'is-zero'}"><span class="pm-dot" style="background:${statusColors[status]}"></span><span class="pm-label">${t(`status_${status}`)}</span><span class="pm-track"><span class="pm-fill" style="width:${pctOf(count)}%;background:${statusColors[status]}"></span></span><span class="pm-count">${count}</span></div>`;
+        }).join('')}
+      </div>
+      <div class="pm-alerts">
+        <div class="pm-alert ${overdue ? 'pm-alert-danger' : 'pm-alert-ok'}">
+          <span class="pm-alert-ico">${icon(overdue ? 'alert-circle' : 'check-circle')}</span>
+          <div class="pm-alert-body"><strong>${overdue}</strong><span class="pm-alert-label">${overdue ? t('stat_overdue') : t('pm_none_overdue')}</span></div>
+        </div>
+        <div class="pm-alert pm-alert-accent">
+          <span class="pm-alert-ico">${icon('zap')}</span>
+          <div class="pm-alert-body"><strong>${inProgressNow}</strong><span class="pm-alert-label">${t('status_in_progress')}</span></div>
+        </div>
       </div>
     </section>`;
-  content.innerHTML = `<div class="grid stats-grid">${['high', 'medium', 'low'].map((priority) => `<section class="card"><h3>${t(`priority_${priority}`)}</h3><div class="task-list">${tasks.filter((task) => task.priority === priority && isOpenTask(task)).map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`).join('')}${analysisCard}</div>`;
+  const columns = ['high', 'medium', 'low'].map((priority) => {
+    const list = tasks.filter((task) => task.priority === priority && isOpenTask(task));
+    return `<section class="card pm-col"><div class="section-header"><h3>${t(`priority_${priority}`)}</h3><span class="badge ${priority}">${list.length}</span></div><div class="task-list">${list.map((task) => renderTaskCard(task, categoryMap.get(task.categoryId))).join('') || `<p class="empty-state">${t('no_tasks')}</p>`}</div></section>`;
+  }).join('');
+  content.innerHTML = `
+    <div class="view-head">
+      <h2 class="view-title">${t('priority_matrix')}</h2>
+      <p class="view-subtitle">${t('pm_subtitle')}</p>
+    </div>
+    <div class="grid stats-grid pm-columns">${columns}</div>
+    ${analysisCard}
+  `;
   attachTaskCardEvents(content);
   refreshIcons();
 }

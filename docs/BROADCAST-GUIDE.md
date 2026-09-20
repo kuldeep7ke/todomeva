@@ -24,7 +24,7 @@ One combined bin holds BOTH features — pills live under `broadcasts`, the bann
 
 | Content | Bin ID | API URL |
 |---|---|---|
-| Broadcasts + banner | `6aafbef5ffd5d160531bda2a` | https://api.jsonbin.io/v3/b/6aafbef5ffd5d160531bda2a/latest |
+| Broadcasts + banner | `6aafc56aac6210605ae2573a` | https://api.jsonbin.io/v3/b/6aafc56aac6210605ae2573a/latest |
 
 Dashboard: https://jsonbin.io → **Bins** → click the Announcements bin → edit → **Save (Ctrl+S)**
 

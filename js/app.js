@@ -18,6 +18,7 @@ let timerPopupShownFor = new Map();
 window.__enterApp = function enterApp() {
   document.querySelector('#landing-page').classList.add('hidden');
   document.querySelector('#app-shell').classList.remove('hidden');
+  syncViewHistory('dashboard');
   initApp();
 };
 
@@ -28,6 +29,107 @@ window.__backToLanding = function backToLanding() {
 
 window.refreshCurrentView = refreshCurrentView;
 window.navigateTo = navigateTo;
+
+// ---- Back/forward navigation (Android hardware back, browser back on GH/CF Pages) ----
+const NAV_KEY = '__todomevaView';
+const OVERLAY_MARK = '__overlay__';
+const OVERLAY_SELECTORS = [
+  '#quick-add-modal', '#task-modal', '#special-day-modal', '#timer-popup', '#onboarding-overlay',
+  '#fab-menu', '#sidebar', '#notif-panel'
+];
+let overlayOpen = false;
+const openOverlays = new Set();
+
+function syncViewHistory(view) {
+  const current = history.state || {};
+  if (current.h !== NAV_KEY) history.replaceState({ h: NAV_KEY, view }, '');
+  else if (current.view !== view) history.pushState({ h: NAV_KEY, view }, '');
+}
+
+function overlayOpened() {
+  overlayOpen = true;
+  history.pushState({ h: NAV_KEY, view: OVERLAY_MARK }, '');
+}
+
+function overlayClosed() {
+  overlayOpen = false;
+}
+
+function isOverlayElOpen(element) {
+  return element.classList.contains('open') || !element.classList.contains('hidden');
+}
+
+function setupOverlayTracking() {
+  const elements = OVERLAY_SELECTORS.map((selector) => document.querySelector(selector)).filter(Boolean);
+  const observer = new MutationObserver(() => {
+    for (const element of elements) {
+      const open = isOverlayElOpen(element);
+      const tracked = openOverlays.has(element);
+      if (open && !tracked) {
+        openOverlays.add(element);
+        overlayOpened();
+      } else if (!open && tracked) {
+        openOverlays.delete(element);
+        if (openOverlays.size === 0) overlayClosed();
+      }
+    }
+  });
+  for (const element of elements) {
+    observer.observe(element, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+
+async function closeTopOverlay() {
+  const quickAdd = document.querySelector('#quick-add-modal');
+  if (quickAdd && !quickAdd.classList.contains('hidden')) {
+    await guardModalClose('#quick-add-modal', closeQuickAdd);
+    return;
+  }
+  const taskModal = document.querySelector('#task-modal');
+  if (taskModal && !taskModal.classList.contains('hidden')) {
+    await guardModalClose('#task-modal', closeTaskModal);
+    return;
+  }
+  const specialDay = document.querySelector('#special-day-modal');
+  if (specialDay && !specialDay.classList.contains('hidden')) {
+    specialDay.classList.add('hidden');
+    return;
+  }
+  const timerPopup = document.querySelector('#timer-popup');
+  if (timerPopup && !timerPopup.classList.contains('hidden')) {
+    timerPopup.classList.add('hidden');
+    return;
+  }
+  const onboarding = document.querySelector('#onboarding-overlay');
+  if (onboarding && !onboarding.classList.contains('hidden')) {
+    onboarding.classList.add('hidden');
+    return;
+  }
+  const fabMenu = document.querySelector('#fab-menu');
+  if (fabMenu && !fabMenu.classList.contains('hidden')) {
+    closeFabMenu();
+    return;
+  }
+  const sidebar = document.querySelector('#sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    closeSidebar();
+    return;
+  }
+  closeNotifications();
+}
+
+window.addEventListener('popstate', (event) => {
+  const shell = document.querySelector('#app-shell');
+  if (!shell || shell.classList.contains('hidden')) return;
+  const state = event.state || {};
+  if (state.h !== NAV_KEY) return;
+  if (state.view === OVERLAY_MARK) {
+    if (overlayOpen) closeTopOverlay();
+    return;
+  }
+  if (overlayOpen || typeof state.view !== 'string') return;
+  navigateTo(state.view, { fromHistory: true });
+});
 
 function hideSplash() {
   const splash = document.querySelector('#splash-screen');
@@ -106,6 +208,7 @@ async function autoConnect() {
 }
 
 function wireGlobalEvents() {
+  setupOverlayTracking();
   renderFabMenu();
   document.querySelector('#fab').addEventListener('click', toggleFabMenu);
   document.querySelector('#fab-menu').addEventListener('click', handleFabMenuClick);
@@ -280,8 +383,11 @@ function wireSettingsEvents() {
   }
 }
 
-function navigateTo(view) {
-  activeView = view;
+function navigateTo(view, opts = {}) {
+  if (view !== activeView) {
+    activeView = view;
+    if (!opts.fromHistory) syncViewHistory(view);
+  }
   closeSidebar();
   refreshCurrentView();
 }

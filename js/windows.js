@@ -57,6 +57,7 @@ export function startOfYear() {
 
 export function resolveWindow(dateStr) {
   if (!dateStr) return 'no_date';
+  dateStr = String(dateStr).slice(0, 10);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const target = parse(dateStr);

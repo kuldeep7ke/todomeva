@@ -182,11 +182,12 @@ function calHeader(year, month) {
 }
 
 function refreshCalView(picker) {
-  const menu = picker.querySelector('[data-date-menu]');
+  const menu = picker.querySelector('[data-date-menu]') || document.querySelector('[data-date-menu]');
+  if (!menu) return;
   const year = Number(menu.dataset.calYear);
   const month = Number(menu.dataset.calMonth);
-  picker.querySelector('.cal-header').outerHTML = calHeader(year, month);
-  picker.querySelector('[data-cal-body]').innerHTML = calGrid(year, month, picker.querySelector('input[type="hidden"]').value);
+  menu.querySelector('.cal-header').outerHTML = calHeader(year, month);
+  menu.querySelector('[data-cal-body]').innerHTML = calGrid(year, month, picker.querySelector('input[type="hidden"]').value);
   refreshIcons();
 }
 
@@ -238,9 +239,9 @@ export function bindCategoryPickers(root = document) {
   root.querySelectorAll('[data-cat-picker]').forEach((picker) => {
     if (picker.dataset.bound) return;
     picker.dataset.bound = '1';
+    const menu = picker.querySelector('[data-cat-menu]');
     picker.querySelector('[data-cat-trigger]').addEventListener('click', (event) => {
       event.stopPropagation();
-      const menu = picker.querySelector('[data-cat-menu]');
       const wasOpen = !menu.classList.contains('hidden');
       closeOpenMenus(picker);
       if (wasOpen) return;
@@ -251,7 +252,7 @@ export function bindCategoryPickers(root = document) {
       btn.addEventListener('click', (event) => {
         event.stopPropagation();
         const id = btn.dataset.catOptMain;
-        const option = picker.querySelector(`[data-cat-opt="${id}"]`);
+        const option = menu.querySelector(`[data-cat-opt="${id}"]`);
         const input = picker.querySelector('input[type="hidden"]');
         if (input) input.value = id;
         picker.querySelector('[data-cat-label]').textContent = option.querySelector('.cat-opt-name').textContent;
@@ -260,7 +261,7 @@ export function bindCategoryPickers(root = document) {
           const dotEl = picker.querySelector('[data-cat-dot]');
           if (dotEl) dotEl.style.background = dot.style.background;
         }
-        picker.querySelectorAll('.cat-option').forEach((row) => row.classList.toggle('selected', row === option));
+        menu.querySelectorAll('.cat-option').forEach((row) => row.classList.toggle('selected', row === option));
       });
     });
     picker.querySelectorAll('[data-cat-color]').forEach((swatch) => {
@@ -269,9 +270,11 @@ export function bindCategoryPickers(root = document) {
         const id = Number(swatch.dataset.catColor);
         const color = swatch.dataset.color;
         await updateCategory(id, { color });
-        picker.querySelectorAll(`[data-cat-dot="${id}"], [data-cat-opt="${id}"] .swatch`).forEach((el) => {
-          if (el.classList.contains('swatch')) el.classList.toggle('active', el.dataset.color === color);
-          else el.style.background = color;
+        menu.querySelectorAll(`[data-cat-opt="${id}"] .swatch`).forEach((el) => {
+          el.classList.toggle('active', el.dataset.color === color);
+        });
+        picker.querySelectorAll(`[data-cat-dot="${id}"]`).forEach((el) => {
+          el.style.background = color;
         });
         if (picker.querySelector('input[name="categoryId"]').value === String(id)) {
           picker.querySelector('[data-cat-dot]').style.background = color;
@@ -286,35 +289,54 @@ function closeOpenMenus(except = null) {
     if (except && menu.closest('[data-cat-picker], [data-date-picker]') === except) return;
     menu.classList.add('hidden');
     menu.style.cssText = '';
+    if (menu._home) {
+      if (menu._home.isConnected) menu._home.appendChild(menu);
+      else menu.remove();
+      delete menu._home;
+    }
   });
 }
 
-function anchorMenuWithinModal(picker, menu) {
-  if (!menu.closest('.modal-card')) return;
-  const trigger = menu.parentElement.querySelector('[data-date-trigger]') || menu.parentElement.querySelector('[data-cat-trigger]');
-  if (!trigger) return;
+function placeMenu(trigger, menu) {
+  const gap = 6;
+  const vh = window.innerHeight;
+  const maxViewport = vh - 16;
+  let menuHeight = menu.offsetHeight;
   const rect = trigger.getBoundingClientRect();
-  const isDateMenu = Boolean(menu.querySelector('[data-cal-body]'));
-  const width = isDateMenu ? menu.offsetWidth : rect.width;
-  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - width - 8);
-  const menuHeight = menu.offsetHeight;
-  const spaceBelow = window.innerHeight - rect.bottom - 10;
-  menu.style.position = 'fixed';
-  menu.style.left = `${left}px`;
-  menu.style.minWidth = '0';
-  if (!isDateMenu) menu.style.width = `${rect.width}px`;
-  if (menuHeight <= spaceBelow) {
-    menu.style.top = `${rect.bottom + 6}px`;
-    return;
+  const belowTop = rect.bottom + gap;
+  const aboveTop = rect.top - gap - menuHeight;
+  let top;
+  if (rect.bottom <= vh - 8 && belowTop + menuHeight <= vh - 8) {
+    top = belowTop;
+  } else if (aboveTop >= 8 && aboveTop + menuHeight <= vh - 8) {
+    top = aboveTop;
+  } else {
+    menu.style.maxHeight = `${maxViewport}px`;
+    menuHeight = Math.min(menuHeight, maxViewport);
+    top = Math.max(8, Math.min(Math.max(belowTop, 8), vh - menuHeight - 8));
   }
-  const spaceAbove = rect.top - 10;
-  if (menuHeight <= spaceAbove) {
-    menu.style.top = `${rect.top - menuHeight - 6}px`;
-    return;
-  }
-  menu.style.top = '10px';
-  menu.style.maxHeight = `${Math.max(60, spaceAbove)}px`;
+  menu.style.left = `${Math.min(Math.max(rect.left, 8), Math.max(8, window.innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${top}px`;
+  menu.style.maxHeight = `${Math.max(160, Math.min(maxViewport, vh - top - 8))}px`;
   menu.style.overflowY = 'auto';
+}
+
+function anchorMenuWithinModal(picker, menu) {
+  if (!menu._home) menu._home = menu.parentElement;
+  if (menu.parentElement !== document.body) document.body.appendChild(menu);
+  const trigger = picker.querySelector('[data-date-trigger], [data-cat-trigger]');
+  if (!trigger) return;
+  const isDateMenu = menu.hasAttribute('data-date-menu');
+  menu.style.position = 'fixed';
+  menu.style.minWidth = '0';
+  menu.style.marginTop = '0';
+  menu.style.zIndex = '90';
+  if (!isDateMenu) menu.style.width = `${trigger.getBoundingClientRect().width}px`;
+  placeMenu(trigger, menu);
+  requestAnimationFrame(() => placeMenu(trigger, menu));
+  [60, 140, 260].forEach((delay) => setTimeout(() => {
+    if (!menu.classList.contains('hidden') && menu.parentElement === document.body) placeMenu(trigger, menu);
+  }, delay));
 }
 
 document.addEventListener('click', (event) => {
@@ -322,6 +344,14 @@ document.addEventListener('click', (event) => {
 });
 
 document.querySelectorAll('.modal-card').forEach((card) => card.addEventListener('scroll', () => closeOpenMenus()));
+
+['#quick-add-modal', '#task-modal', '#special-day-modal'].forEach((id) => {
+  const modal = document.querySelector(id);
+  if (!modal) return;
+  new MutationObserver(() => {
+    if (modal.classList.contains('hidden')) closeOpenMenus();
+  }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+});
 
 export function renderSidebar(categories, tasks, activeView) {
   const sidebar = document.querySelector('#sidebar');
@@ -396,6 +426,7 @@ export function renderTaskCard(task, category) {
   const priority = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const status = STATUS_CONFIG[task.status] || STATUS_CONFIG.not_started;
   const isOpen = task.status !== 'done' && !task.deletedAt;
+  const late = isOpen && task.dueDate && task.dueDate < localDateStr();
   const running = isOpen && task.status === 'in_progress' && Boolean(task.focusStartedAt) && Number(task.durationMinutes) > 0;
   return `
     <article class="task-card ${task.status === 'done' ? 'completed' : ''} ${task.status === 'pending' ? 'pending' : ''}" data-task-id="${task.id}">
@@ -410,7 +441,7 @@ export function renderTaskCard(task, category) {
         ${task.description ? `<p class="muted">${escapeHtml(task.description)}</p>` : ''}
         <div class="task-meta">
           <span>${category?.name || t('no_category')}</span>
-          ${task.dueDate ? `<span>${t('due_prefix')} ${task.dueDate}</span>` : ''}
+          ${task.dueDate ? `<span${late ? ' class="meta-late"' : ''}>${t('due_prefix')} ${task.dueDate}</span>` : ''}
           ${task.recurrence && task.recurrence !== 'none' ? `<span>${t('repeats_prefix')} ${t(`repeat_${task.recurrence}`)}</span>` : ''}
         </div>
         ${Number(task.durationMinutes) > 0 ? `<div class="task-actions">${running ? `<button class="chip-btn active" data-timer-toggle="${task.id}" title="Pause timer"><i data-lucide="pause"></i><span data-timer-chip="${task.id}">${timerLabel(task)}</span></button>` : task.status === 'in_progress' ? `<button class="chip-btn" data-timer-toggle="${task.id}" title="Start timer"><i data-lucide="play"></i><span>${timerLabel(task)}</span></button>` : ''}</div>` : ''}

@@ -1,12 +1,12 @@
 import { getCategories, getTasks, getSpecialDays, localDateStr } from './db.js?v=8';
-import { attachTaskCardEvents, bindCategoryPickers, icon, openQuickAdd, renderTaskCard, renderSpecialDayCard, refreshIcons } from './components.js?v=15';
+import { attachTaskCardEvents, bindCategoryPickers, icon, openQuickAdd, renderTaskCard, renderSpecialDayCard, refreshIcons } from './components.js?v=17';
 import { getLang, getLangs, t } from './i18n.js?v=15';
 import { getDeviceId, getBroadcastStatus } from './broadcast.js?v=8';
 import { getNotifyPrefs } from './prefs.js?v=5';
 import { getProfile } from './account.js?v=4';
 import { isNotificationsSupported, getNotificationPermission } from './reminder.js?v=8';
 import { getLastUrl, getSavedSyncLink, getSyncConfig, getSyncStatus, SCHEMA_SQL } from './sync.js?v=11';
-import { TIME_WINDOWS, bucketByWindow } from './windows.js?v=1';
+import { TIME_WINDOWS, bucketByWindow } from './windows.js?v=2';
 
 function isOpenTask(task) {
   return task.status !== 'done' && task.status !== 'pending' && !task.deletedAt;
@@ -22,9 +22,9 @@ export async function renderDashboard() {
   const content = document.querySelector('#view-content');
   content.innerHTML = `
     <section class="grid stats-grid">
-      ${stat(t('stat_open'), openTasks.length)}${stat(t('stat_due_today'), dueToday.length)}${stat(t('stat_overdue'), overdue.length)}${stat(t('stat_completed'), completed.length)}
+      ${stat(t('stat_open'), openTasks.length, 'inbox', 'plain')}${stat(t('stat_due_today'), dueToday.length, 'calendar-clock')}${stat(t('stat_overdue'), overdue.length, 'alarm-clock', 'danger')}${stat(t('stat_completed'), completed.length, 'check-check', 'success')}
     </section>
-    <section class="card"><h3>${t('quick_create')}</h3><div class="quick-create"><button class="btn btn-primary" data-open-quick-add>${t('add_task_fab')}</button><span class="muted">${t('quick_add_hint')}</span></div></section>
+    <section class="card card-accent"><h3>${t('quick_create')}</h3><div class="quick-create"><button class="btn btn-primary" data-open-quick-add>${t('add_task_fab')}</button><span class="muted">${t('quick_add_hint')}</span></div></section>
     ${taskSection(t('section_overdue'), overdue, categoryMap)}
     ${taskSection(t('section_today'), dueToday, categoryMap)}
     ${taskSection(t('section_all_open'), openTasks.filter((task) => task.dueDate !== today && !(task.dueDate && task.dueDate < today)), categoryMap)}
@@ -80,12 +80,12 @@ export async function renderTime(activeWindow = 'today') {
 }
 
 export async function openSpecialDayModal() {
-  const { openSpecialDayForm } = await import('./components.js?v=14');
+  const { openSpecialDayForm } = await import('./components.js?v=17');
   await openSpecialDayForm();
 }
 
 async function openSpecialDayModalFor(sd) {
-  const { openSpecialDayForm } = await import('./components.js?v=14');
+  const { openSpecialDayForm } = await import('./components.js?v=17');
   await openSpecialDayForm(sd);
 }
 
@@ -455,8 +455,8 @@ function settingsRow(iconName, titleKey, descKey, control) {
     </div>`;
 }
 
-function stat(label, value) {
-  return `<article class="card stat-card"><strong>${value}</strong><span>${label}</span></article>`;
+function stat(label, value, iconName = 'inbox', tone = '') {
+  return `<article class="card stat-card"><span class="stat-ico ${tone}">${icon(iconName)}</span><div><strong>${value}</strong><span>${label}</span></div></article>`;
 }
 
 function taskSection(title, tasks, categoryMap) {

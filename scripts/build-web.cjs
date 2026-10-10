@@ -4,7 +4,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const www = path.join(root, 'www');
 
-const entries = ['index.html', 'css', 'js', 'assets', 'vendor'];
+const entries = ['index.html', 'manifest.webmanifest', 'css', 'js', 'assets', 'vendor'];
 
 fs.rmSync(www, { recursive: true, force: true });
 fs.mkdirSync(www, { recursive: true });

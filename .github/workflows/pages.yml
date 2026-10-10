@@ -24,7 +24,7 @@ jobs:
       - name: Assemble static site
         run: |
           mkdir -p public
-          cp index.html public/
+          cp index.html manifest.webmanifest public/
           cp -r css js assets vendor public/
 
       - uses: actions/upload-pages-artifact@v5

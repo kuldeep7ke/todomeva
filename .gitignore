@@ -17,4 +17,7 @@ Thumbs.db
 www/
 
 # Release keystore (kept local only; never commit)
-todomeva-release.keystoreplaywright-mcp/
+todomeva-release.keystore
+
+# Browser automation screenshots
+playwright-mcp/

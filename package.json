@@ -5,6 +5,7 @@
   "description": "Todo Meva - offline-first todo manager with reminders, sync and broadcasts",
   "scripts": {
     "build": "node scripts/build-web.cjs",
+    "test": "node scripts/check-js.cjs",
     "version:patch": "node scripts/bump-version.cjs patch",
     "version:minor": "node scripts/bump-version.cjs minor",
     "version:major": "node scripts/bump-version.cjs major",

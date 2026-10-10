@@ -14,10 +14,22 @@ No bundler, no framework, no backend to run: plain HTML/CSS/JS ES modules with D
 
 | Platform | How to get it | Notes |
 |---|---|---|
-| Web | Open https://kuldeep7ke.github.io/todomeva/ | Full app, installable via browser "Add to home screen" |
+| Web | Open https://kuldeep7ke.github.io/todomeva/ | Full app; installs through the web manifest ("Add to home screen" / install icon) |
 | Android (APK) | GitHub → **Actions** → **Build Android APK** → latest run → **Todomeva-APK** artifact → download + extract `app-debug.apk` | Debug-signed; sideload and allow install from unknown sources |
 
 The release build for the Play Store is not published; the workflow artifact is the distribution channel right now.
+
+### Web install — what it does and doesn't do
+
+`manifest.webmanifest` is linked from `index.html`, so browsers that support web manifests offer
+**Install / Add to home screen** and open Todo Meva in its own standalone window.
+
+There is **no service worker**, so there is no cached app shell:
+
+- Loading the app needs a connection — first visit and every reload.
+- "Offline-first" means your **data**: tasks live in Dexie/IndexedDB on your device and the app
+  makes no network calls for them unless you switch on sync.
+- Google Fonts and the announcements feed also need the network (both fail silently offline).
 
 ## Build & Run
 
@@ -39,7 +51,9 @@ node scripts/update-android-version.cjs   # sync VERSION -> gradle
 ./gradlew assembleDebug        # in android/
 ```
 
-Prerequises (local Android build only): Node 20+, JDK 21, Android SDK, `ANDROID_HOME` set. The CI workflow in `.github/workflows/build-apk.yml` does all of this for you on every push — no secrets needed.
+Prerequises (local Android build only): Node 22 recommended (20+ works), JDK 21, Android SDK, `ANDROID_HOME` set. The CI workflow in `.github/workflows/build-apk.yml` (Node 22) does all of this for you on every push — no secrets needed.
+
+Run `npm test` after editing JavaScript: it `node --check`s every file in `js/`.
 
 ## Features
 
@@ -70,6 +84,7 @@ Deep dive: [docs/ANNOUNCEMENTS-EDGE-PROXY-GUIDE.md](docs/ANNOUNCEMENTS-EDGE-PROX
 ```
 todomeva/
 ├── index.html               # Landing page + app shell + modals (cache-versioned asset refs)
+├── manifest.webmanifest     # web app manifest: install / standalone window (no service worker)
 ├── css/style.css            # Warm flat UI system, 3 brand palettes, sync/notif/broadcast styles
 ├── js/                      # ES modules — see MEMORY_CAPSULE.md for the dependency graph
 │   ├── app.js               #   orchestrator: init, navigation, settings actions

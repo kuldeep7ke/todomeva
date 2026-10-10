@@ -1,0 +1,18 @@
+{
+  "name": "Todo Meva — tasks, categories & reminders",
+  "short_name": "Todo Meva",
+  "description": "Offline-first to-do app with 8 smart categories, 48 templates, recurring tasks and reminders. No account, no cloud — your data stays on your device.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f6f1ea",
+  "theme_color": "#f6f1ea",
+  "icons": [
+    {
+      "src": "assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
